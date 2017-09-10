@@ -1,0 +1,26 @@
+                                            _ __
+                           ____ ___  ____ _(_) /
+                          / __ `__ \/ __ `/ / / 
+                         / / / / / / /_/ / / /  
+                        /_/ /_/ /_/\__,_/_/_/   
+                                                
+
+simple mail server written in C for POSIX. get yourself some mail!
+
+output is stdout (mentions IP and stuff, too) or files in a directory (mbox
+format; still WIP). configuration of output is compile-time, sorry! specify the
+port to listen on and the domain at runtime, though.
+
+multi-threaded!
+
+--------------------------------------------------------------------------------
+
+__      ___   ___ _  _ ___ _  _  ___ 
+\ \    / /_\ | _ \ \| |_ _| \| |/ __|
+ \ \/\/ / _ \|   / .` || || .` | (_ |
+  \_/\_/_/ \_\_|_\_|\_|___|_|\_|\___|
+                                     
+
+TCP is a lot easier to attack compared to UDP. I'm not very good at security so
+please don't expect this server to be very secure. please exercise caution and
+make good choices!
