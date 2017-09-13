@@ -141,7 +141,7 @@ void *server_child(void *arg) {
                     send(sess->fd, "502 Command not implemented\r\n", 29, 0);
                 }
             } else { /* processing message data */
-                if (*lns == '.') {
+                if (strstr(lns, ".")) {
                     send(sess->fd, "250 OK\r\n", 8, 0);
                     flg_in_data = 0;
                 }
