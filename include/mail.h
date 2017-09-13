@@ -7,13 +7,13 @@
 struct mail {
     int from_c;
     char *from_v;
-    int to_c
+    int to_c;
     char *to_v; /* null-separated array of to email addresses */
     int data_c;
     char *data_v;
 };
 
-void mail_new(mail_internal)
-void mail_serialize(mail_internal *email);
+struct mail *mail_new();
+void mail_serialize(struct mail *email);
 
 #endif /* __MAIL_H_INC */

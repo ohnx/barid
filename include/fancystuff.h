@@ -1,5 +1,5 @@
 #ifndef __FANCYSTUFF_H_INC
-#define
+#define __FANCYSTUFF_H_INC
 
 #ifdef __linux__
 #define KRED  "\x1B[31m"
@@ -14,6 +14,4 @@
 #define WARN "["KYEL"!"RESET"] "
 #define ERR "["KRED"!"RESET"] "
 
-typedef char flag;
-
-#endif /*  */
+#endif /* __FANCYSTUFF_H_INC */
