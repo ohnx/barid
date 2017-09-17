@@ -1,3 +1,4 @@
+/* This file has TODO's. */
 #include "server.h"
 
 void server_initsocket(struct server *state) {
@@ -38,18 +39,25 @@ void *server_child(void *arg) {
     struct session *sess;
     char buf_in[LARGEBUF], buf_out[SMALLBUF];
     struct timeval timeout;
-    int recvnum, buf_in_off, i;
-    char flg_in_data = 0;
+    enum server_stage stage;
+    int recvnum, buf_in_off;
+    struct mail *mail;
 
     /* initial values */
-    timeout.tv_sec = 120;
+    timeout.tv_sec = 300;
     timeout.tv_usec = 0;
     buf_in_off = 0;
+    mail = mail_new();
+    stage = HELO;
 
     /* extract the required data from args */
     sess = (struct session *)arg;
 
-    /* TODO: Not generate the greeting every. single. thread. */
+    /* 
+     * TODO: Not generate the greeting every. single. thread.
+     * also TODO: move this to SMTP; ideally, server.c knows nothing about 
+     * the SMTP protocol itself.
+     */
     /* initial greeting */
     sprintf(buf_out, "220 %s %s\r\n", (sess->parent)->domain, MAILVER);
     send(sess->fd, buf_out, strlen(buf_out), 0);
@@ -73,9 +81,7 @@ void *server_child(void *arg) {
         }
 
         /* receive data */
-        recvnum = recv(sess->fd, buf_in + buf_in_off, LARGEBUF - buf_in_off, 0);
-
-        printf("got data from %d: ```\n%s\n```\n", sess->fd, buf_in);
+        recvnum = recv(sess->fd, buf_in + buf_in_off, LARGEBUF - buf_in_off - 1, 0);
 
         /* check for errors */
         if (recvnum == 0) { /* Remote host closed connection */
@@ -84,18 +90,21 @@ void *server_child(void *arg) {
 			break;
 		}
 
+        /* null-terminate data */
+        buf_in[recvnum] = 0; /* null terminate the end string! :D */
+
         /* update the offset */
         lns = buf_in;
         buf_in_off += recvnum;
 
-        /* parse the data */
+        /* search for first newline */
         eol = strstr(buf_in, "\r\n");
 
-        /* eol not found */
+        /* first newline not found */
         if (eol == NULL) {
             /* overflow; line too long */
-            if (buf_in_off >= LARGEBUF) {
-                send(sess->fd, "500 Line too long\r\n", 19, 0);
+            if (buf_in_off + recvnum >= LARGEBUF - 1) {
+                smtp_handlecode(500, sess->fd);
 
                 /* reset the count and keep going */
                 buf_in_off = 0;
@@ -110,40 +119,22 @@ void *server_child(void *arg) {
         do {
             /* Null-terminate this line */
             *eol = 0;
+            printf("`%s`\n", lns);
 
             /* are we processing verbs or what? */
-            if (!flg_in_data) { /* processing a verb */
-                /* convert to upper case if it's in lower case */
-                for (i = 0; i < 4; i++) {
-                    if (lns[i] >= 'a' && lns[i] < 'z') {
-                        lns[i] -= 32;
-                    }
-                }
-
-                /* check verbs */
-                if (!strncmp(lns, "HELO", 4)) { /* initial greeting */
-                    send(sess->fd, "250 OK\r\n", 8, 0);
-                } else if (!strncmp(lns, "MAIL", 4)) { /* got mail from ... */
-                    send(sess->fd, "250 OK\r\n", 8, 0);
-                } else if (!strncmp(lns, "RCPT", 4)) { /* mail addressed to */
-                    send(sess->fd, "250 OK RCPT\r\n", 13, 0);
-                } else if (!strncmp(lns, "DATA", 4)) { /* message data */
-                    send(sess->fd, "354 CONTINUE\r\n", 14, 0);
-                    flg_in_data = 1;
-                } else if (!strncmp(lns, "NOOP", 4)) { /* do nothing */
-                    send(sess->fd, "250 OK\r\n", 8, 0);
-                } else if (!strncmp(lns, "RSET", 4)) { /* reset connection */
-                    send(sess->fd, "250 OK\r\n", 8, 0);
-                } else if (!strncmp(lns, "QUIT", 4)) { /* bye! */
-                    send(sess->fd, "221 OK\r\n", 8, 0);
-                    goto disconnect;
-                } else {
-                    send(sess->fd, "502 Command not implemented\r\n", 29, 0);
-                }
+            if (stage != END_DATA) { /* processing a verb */
+                /* smtp_handlecode returns 1 when server should quit */
+                if (smtp_handlecode(smtp_parsel(lns, &stage, mail), sess->fd))
+                        goto disconnect;
             } else { /* processing message data */
-                if (strstr(lns, ".")) {
-                    send(sess->fd, "250 OK\r\n", 8, 0);
-                    flg_in_data = 0;
+                /* check for end of data */
+                if (!strcmp(lns, ".")) {
+                    /* end of data! send OK message and set status to QUIT */
+                    smtp_handlecode(250, sess->fd);
+                    stage = QUIT;
+                } else {
+                    /* mail done! */
+                    mail_appenddata(mail, lns);
                 }
             }
 
@@ -155,10 +146,10 @@ void *server_child(void *arg) {
         /* update data offsets and buffer */
         memmove(buf_in, lns, LARGEBUF - (lns - buf_in));
         buf_in_off -= (lns - buf_in);
-        
-        if (flg_in_data) {
-            buf_in_off = 0;
-        }
+
+        /* do something magical that I have no idea what it does but it works */
+        /* TODO: figure out what's going on here */
+        if (stage == END_DATA) buf_in_off = 0;
     }
 
 disconnect:

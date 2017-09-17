@@ -12,16 +12,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "fancystuff.h"
+#include "common.h"
 #include "mail.h"
-
-/* version string */
-#define MAILVER "SMTP mail"
-
-/* this is the buffer for a single line; mail size can be found in mail.h */
-#define LARGEBUF        4096
-/* this is the small buffer for output */
-#define SMALLBUF        256
+#include "smtp.h"
 
 struct server {
     int socket;
@@ -34,6 +27,8 @@ struct session {
     int fd;
     struct mail *data;
 };
+
+
 
 void server_initsocket(struct server *state);
 int server_bindport(struct server *state, int port);
