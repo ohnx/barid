@@ -21,6 +21,9 @@ int smtp_handlecode(int code, int fd) {
     case 451:
         send(fd, "451 INTERNAL ERROR\r\n", 20, 0);
         return 0;
+    case 452:
+        send(fd, "452 TOO MANY RCPTS\r\n", 20, 0);
+        return 0;
     /* 500-family client-caused error */
     case 500:
         send(fd, "500 LINE TOO LONG!\r\n", 20, 0);
@@ -66,13 +69,13 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
     }
 
     /* more complex logic verbs */
-    if (!strncmp(line, "HELO", 4)) { /* initial greeting */
+    if (!strncmp(line, "HELO", 4) || !strncmp(line, "EHLO", 4)) { /* greeting */
         /* ensure correct order */
         if (!(*stage == HELO)) {
             return 503;
         }
 
-        /* ensure valid HELO message */
+        /* ensure valid HELO/EHLO message */
         if (line_len < 5) {
             return 501;
         }
@@ -125,7 +128,7 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
             return 450; /* no forward slashes in an email is actually
                          * a restriction set by `mail`, not by rfc's. */
         } else if (i == MAIL_ERROR_RCPTMAX) { /* too many recipients */
-            return 522;
+            return 452;
         } else if (i == MAIL_ERROR_PROGRAM) { /* program error */
             /* TODO: HANDLE THIS */
         }

@@ -30,7 +30,7 @@ int server_bindport(struct server *state, int port) {
     if (res < 0) return res;
 
     /* listen and check for failures */
-    res = listen(state->socket, 16);
+    res = listen(state->socket, 1024);
     return res;
 }
 
