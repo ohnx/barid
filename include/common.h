@@ -23,16 +23,20 @@ enum server_stage {
     QUIT
 };
 
-/* max length of an email (in bytes) - default is 16 MiB (16777216 B) */
-#define MAIL_MAX_DATA_C      16777216
+/* max length of an email's recipients (in bytes)
+ * 1024 recipients @ 256 bytes per email = 262144 B (256 KiB) */
+#define MAIL_MAX_TO_C           262144
+
+/* max length of an email (in bytes) - default is 16777216 B (16 MiB) */
+#define MAIL_MAX_DATA_C         16777216
 
 /* version string */
 #define MAILVER "SMTP mail"
 
-/* this is the buffer for a single line; mail size can be found in mail.h */
-#define LARGEBUF        4096
+/* buffer for a single line of input from a server */
+#define LARGEBUF                4096
 /* this is the small buffer for output */
-#define SMALLBUF        256
+#define SMALLBUF                256
 
 
 #endif /* __COMMON_H_INC */

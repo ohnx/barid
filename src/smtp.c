@@ -1,3 +1,4 @@
+/* There are TODO's in this file. */
 #include "smtp.h"
 
 int smtp_handlecode(int code, int fd) {
@@ -13,13 +14,16 @@ int smtp_handlecode(int code, int fd) {
     case 354:
         send(fd, "354 SEND DATA PLZ!\r\n", 20, 0);
         return 0;
-    /* 400-family client error */
-    case 421:
-        send(fd, "421 INTERNAL ERROR\r\n", 20, 0);
+    /* 400-family server-caused error */
+    case 450:
+        send(fd, "450 BAD MAILBOX :(\r\n", 20, 0);
         return 0;
-    /* 500-family server error */
+    case 451:
+        send(fd, "451 INTERNAL ERROR\r\n", 20, 0);
+        return 0;
+    /* 500-family client-caused error */
     case 500:
-        send(fd, "500 Line too long!\r\n", 20, 0);
+        send(fd, "500 LINE TOO LONG!\r\n", 20, 0);
     case 501:
         send(fd, "501 ARGUMENT ERROR\r\n", 20, 0);
         return 0;
@@ -28,6 +32,9 @@ int smtp_handlecode(int code, int fd) {
         return 0;
     case 503:
         send(fd, "503 WRONG SEQUENCE\r\n", 20, 0);
+        return 0;
+    case 522:
+        send(fd, "522 TOO MANY DATA!\r\n", 20, 0);
         return 0;
     /* Unknown??!? */
     default:
@@ -70,8 +77,15 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
             return 501;
         }
 
-        /* parse out sending server */
-        mail_setattr(mail, FROM_S, line + 5);
+        /* parse out sending server and check return status */
+        i = mail_setattr(mail, FROMS, line + 5);
+        if (i == MAIL_ERROR_PARSE) { /* error parsing */
+            return 501;
+        } else if (i == MAIL_ERROR_OOM) { /* server out of memory */
+            return 451;
+        } else if (i == MAIL_ERROR_PROGRAM) { /* program error */
+            /* TODO: HANDLE THIS */
+        }
 
         /* update stage */
         *stage = MAIL;
@@ -82,8 +96,15 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         /* ensure valid MAIL FROM: message */
         if (line_len < 10) return 501;
 
-        /* parse out sender */
-        mail_setattr(mail, FROM, line + 10);
+        /* parse out sending server and check return status */
+        i = mail_setattr(mail, FROM, line + 10);
+        if (i == MAIL_ERROR_PARSE) { /* error parsing */
+            return 501;
+        } else if (i == MAIL_ERROR_OOM) { /* server out of memory */
+            return 451;
+        } else if (i == MAIL_ERROR_PROGRAM) { /* program error */
+            /* TODO: HANDLE THIS */
+        }
 
         /* update stage */
         *stage = RCPT;
@@ -94,8 +115,20 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         /* ensure valid RCPT TO: message */
         if (line_len < 8) return 501;
         
-        /* parse out sender */
-        mail_addattr(mail, TO, line + 8);
+        /* parse out sending server and check return status */
+        i = mail_addattr(mail, TO, line + 8);
+        if (i == MAIL_ERROR_PARSE) { /* error parsing */
+            return 501;
+        } else if (i == MAIL_ERROR_OOM) { /* server out of memory */
+            return 451;
+        } else if (i == MAIL_ERROR_INVALIDEMAIL) { /* bad dest address */
+            return 450; /* no forward slashes in an email is actually
+                         * a restriction set by `mail`, not by rfc's. */
+        } else if (i == MAIL_ERROR_RCPTMAX) { /* too many recipients */
+            return 522;
+        } else if (i == MAIL_ERROR_PROGRAM) { /* program error */
+            /* TODO: HANDLE THIS */
+        }
 
         /* update stage */
         *stage = DATA;

@@ -28,8 +28,6 @@ struct session {
     struct mail *data;
 };
 
-
-
 void server_initsocket(struct server *state);
 int server_bindport(struct server *state, int port);
 

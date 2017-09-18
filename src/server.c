@@ -40,8 +40,10 @@ void *server_child(void *arg) {
     char buf_in[LARGEBUF], buf_out[SMALLBUF];
     struct timeval timeout;
     enum server_stage stage;
-    int recvnum, buf_in_off;
+    int rcn;
+    unsigned int buf_in_off;
     struct mail *mail;
+    struct sockaddr_storage addr;
 
     /* initial values */
     timeout.tv_sec = 300;
@@ -81,21 +83,21 @@ void *server_child(void *arg) {
         }
 
         /* receive data */
-        recvnum = recv(sess->fd, buf_in + buf_in_off, LARGEBUF - buf_in_off - 1, 0);
+        rcn = recv(sess->fd, buf_in + buf_in_off, LARGEBUF - buf_in_off - 1, 0);
 
         /* check for errors */
-        if (recvnum == 0) { /* Remote host closed connection */
+        if (rcn == 0) { /* Remote host closed connection */
 			break;
-		} else if (recvnum == -1) { /* Error on socket */
+		} else if (rcn == -1) { /* Error on socket */
 			break;
 		}
 
         /* null-terminate data */
-        buf_in[recvnum] = 0; /* null terminate the end string! :D */
+        buf_in[rcn] = 0; /* null terminate the end string! :D */
 
         /* update the offset */
         lns = buf_in;
-        buf_in_off += recvnum;
+        buf_in_off += rcn;
 
         /* search for first newline */
         eol = strstr(buf_in, "\r\n");
@@ -103,7 +105,7 @@ void *server_child(void *arg) {
         /* first newline not found */
         if (eol == NULL) {
             /* overflow; line too long */
-            if (buf_in_off + recvnum >= LARGEBUF - 1) {
+            if (buf_in_off + rcn >= LARGEBUF - 1) {
                 smtp_handlecode(500, sess->fd);
 
                 /* reset the count and keep going */
@@ -119,7 +121,6 @@ void *server_child(void *arg) {
         do {
             /* Null-terminate this line */
             *eol = 0;
-            printf("`%s`\n", lns);
 
             /* are we processing verbs or what? */
             if (stage != END_DATA) { /* processing a verb */
@@ -133,8 +134,16 @@ void *server_child(void *arg) {
                     smtp_handlecode(250, sess->fd);
                     stage = QUIT;
                 } else {
-                    /* mail done! */
-                    mail_appenddata(mail, lns);
+                    /* change \0\n to \n\0 */
+                    *eol = '\n';
+                    *(eol + 1) = 0;
+                    /* append data and check for errors */
+                    rcn = mail_appenddata(mail, lns);
+                    if (rcn == MAIL_ERROR_DATAMAX) {
+                        smtp_handlecode(522, sess->fd);
+                    } else if (rcn == MAIL_ERROR_OOM) {
+                        smtp_handlecode(451, sess->fd);
+                    }
                 }
             }
 
@@ -151,19 +160,26 @@ void *server_child(void *arg) {
         /* TODO: figure out what's going on here */
         if (stage == END_DATA) buf_in_off = 0;
     }
-
 disconnect:
+    /* reusing variable, sorry... */
+    buf_in_off = sizeof(addr);
+    /* Get server name */
+    getpeername(sess->fd, (struct sockaddr *)&addr, &buf_in_off);
+    mail_serialize(mail, STDOUT, &addr);
+
     /* close socket */
     close(sess->fd);
+    if (mail) mail_destroy(mail);
     free(sess);
     pthread_exit(NULL);
 }
 
 int main() {
     /* vars */
+    pthread_attr_t attr;
     struct server state;
     int port;
-    struct session *client_sess;
+    struct session *client_sess = NULL;
 
     /* user config */
     port = 25;
@@ -178,11 +194,22 @@ int main() {
         return -2;
     }
 
+    /* pthread config */
+    if (pthread_attr_init(&attr) != 0) {
+        fprintf(stderr, ERR"Failed to configure threads!\n");
+        return -3;
+    }
+    if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
+        fprintf(stderr, ERR"Failed to configure threads!\n");
+        return -4;
+    }
+
     /* loop forever! */
     while (1) {
+        /* TODO: not exit on OOM; just keep accepting clients and send error */
         /* allocate some memory for a new client session */
         if (client_sess == NULL) {
-            client_sess = malloc(sizeof(client_sess));
+            client_sess = malloc(sizeof(struct session));
 
             /* Make sure it allocated correctly */
             if (client_sess == NULL) {
@@ -201,7 +228,7 @@ int main() {
             break;
         } else {
             /* accepted a new connection, create a thread! */
-            pthread_create(&(state.thread), NULL, &server_child, client_sess);
+            pthread_create(&(state.thread), &attr, &server_child, client_sess);
 
             /* require a new allocation for the next thread */
             client_sess = NULL;

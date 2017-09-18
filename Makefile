@@ -1,6 +1,6 @@
 INCLUDES=-Iinclude/
 LIBS=-lpthread
-CFLAGS=$(INCLUDES) -Wall -Werror -pedantic
+CFLAGS=$(INCLUDES) -Wall -Werror -pedantic -g -O0
 
 OBJ=objs/smtp.o objs/mail.o objs/server.o
 OUTPUT=mail
@@ -16,14 +16,16 @@ objs/%.o: src/%.c
 $(OUTPUT): $(OBJ)
 	$(CC) $^ -o $@ $(LIBS)
 
-
-
-debug/hook_send.so: debug/hook_send.c
+debug/hook_net.so: debug/hook_net.c
 	$(MAKE) -C debug/
 
+.PHONY: debugnet
+debugnet: $(OUTPUT) debug/hook_net.so
+	LD_PRELOAD=debug/hook_net.so ./$(OUTPUT)
+
 .PHONY: debug
-debug: $(OUTPUT) debug/hook_send.so
-	LD_PRELOAD=debug/hook_send.so ./$(OUTPUT)
+debug: $(OUTPUT)
+	valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT)
 
 .PHONY: clean
 clean:

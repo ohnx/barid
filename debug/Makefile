@@ -1,5 +1,5 @@
 default:
-	gcc -Wall -Werror -fPIC -shared -o hook_send.so hook_send.c -ldl
+	gcc -Wall -Werror -fPIC -shared -o hook_net.so hook_net.c -ldl
 
 clean:
-	-rm -f hook_send.so
+	-rm -f hook_net.so
