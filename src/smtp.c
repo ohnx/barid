@@ -68,6 +68,11 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         return 221;
     }
 
+    /* Check that mail is not null */
+    if (!mail) { /* OOM */
+        return 451;
+    }
+
     /* more complex logic verbs */
     if (!strncmp(line, "HELO", 4) || !strncmp(line, "EHLO", 4)) { /* greeting */
         /* ensure correct order */

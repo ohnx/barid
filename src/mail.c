@@ -191,8 +191,8 @@ void mail_destroy(struct mail *email) {
     free(email->extra);
     free(email);
 }
-
-void mail_serialize(struct mail *email, enum mail_sf f, struct sockaddr_storage *a) {
+    
+void mail_serialize(struct mail *email, enum mail_sf f, struct sockaddr_storage *a, int sock) {
     int i = 0;
     char ipstr[INET6_ADDRSTRLEN];
     char hoststr[NI_MAXHOST];
@@ -203,7 +203,7 @@ void mail_serialize(struct mail *email, enum mail_sf f, struct sockaddr_storage 
         inet_ntop(a->ss_family, &((struct sockaddr_in *)a)->sin_addr, ipstr, INET6_ADDRSTRLEN);
     getnameinfo((struct sockaddr *)a, sizeof(*a), hoststr, sizeof(hoststr), NULL, 0, 0);
 
-    printf("------\nok so I just got an email!!! here's some info about it.\n");
+    printf("------\nok so I just got an email from socket %d!!! here's some info about it.\n", sock);
     printf("real sender server ip: `%s` rDNS:`%s`\n", ipstr, hoststr);
     printf("reported sender server: `%s`\n", email->froms_v);
     printf("reported sender email: `%s`\n", email->from_v);

@@ -37,11 +37,11 @@ int server_bindport(struct server *state, int port) {
 void *server_child(void *arg) {
     /* vars */
     struct session *sess;
-    char buf_in[LARGEBUF], buf_out[SMALLBUF];
+    char buf_in[LARGEBUF], buf_out[SMALLBUF], *srv;
     struct timeval timeout;
     enum server_stage stage;
     int rcn;
-    unsigned int buf_in_off;
+    unsigned int buf_in_off, x;
     struct mail *mail;
     struct sockaddr_storage addr;
 
@@ -127,12 +127,25 @@ void *server_child(void *arg) {
                 /* smtp_handlecode returns 1 when server should quit */
                 if (smtp_handlecode(smtp_parsel(lns, &stage, mail), sess->fd))
                         goto disconnect;
+                if (stage == MAIL)
+                    srv = strdup(mail->froms_v);
             } else { /* processing message data */
                 /* check for end of data */
                 if (!strcmp(lns, ".")) {
-                    /* end of data! send OK message and set status to QUIT */
+                    /* end of data! send OK message and set status to MAIL */
                     smtp_handlecode(250, sess->fd);
-                    stage = QUIT;
+                    stage = MAIL;
+
+                    /* print out this mail's info */
+                    x = sizeof(addr);
+                    /* Get server name */
+                    getpeername(sess->fd, (struct sockaddr *)&addr, &x);
+                    mail_serialize(mail, STDOUT, &addr, sess->fd);
+
+                    /* reset the mail */
+                    mail_destroy(mail);
+                    mail = mail_new();
+                    if (mail) mail_setattr(mail, FROMS, srv);
                 } else {
                     /* change \0\n to \n\0 */
                     *eol = '\n';
@@ -161,16 +174,24 @@ void *server_child(void *arg) {
         if (stage == END_DATA) buf_in_off = 0;
     }
 disconnect:
-    /* reusing variable, sorry... */
-    buf_in_off = sizeof(addr);
-    /* Get server name */
-    getpeername(sess->fd, (struct sockaddr *)&addr, &buf_in_off);
-    mail_serialize(mail, STDOUT, &addr);
+    if (mail != NULL) {
+        /* make sure the email was filled */
+        if (mail->from_c > 0) {
+            /* reusing variable, sorry... */
+            x = sizeof(addr);
+            /* Get server name */
+            getpeername(sess->fd, (struct sockaddr *)&addr, &x);
+            mail_serialize(mail, STDOUT, &addr, sess->fd);
+        }
+
+        /* Clean up */
+        mail_destroy(mail);
+    }
 
     /* close socket */
     close(sess->fd);
-    if (mail) mail_destroy(mail);
     free(sess);
+    free(srv);
     pthread_exit(NULL);
 }
 

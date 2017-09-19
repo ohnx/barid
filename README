@@ -21,6 +21,6 @@ __      ___   ___ _  _ ___ _  _  ___
   \_/\_/_/ \_\_|_\_|\_|___|_|\_|\___|
                                      
 
-TCP is pretty easy to attack (slow loris, SYN flood, etc.). I'm not very good at
-security so please don't expect this server to be very secure. please exercise
-caution and make good choices!
+this program is probably pretty easy to attack (slow loris, bad data, etc.).
+i'm not very good at security so please don't expect this server to be very
+secure. please exercise caution and make good choices!
