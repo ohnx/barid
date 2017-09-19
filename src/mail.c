@@ -84,7 +84,6 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
 
         /* no error */
         return MAIL_ERROR_NONE;
-    case TO:
     default:
         /* should be calling mail_addattr() */
         return MAIL_ERROR_PROGRAM;
@@ -141,8 +140,6 @@ int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
 
         /* no error */
         return MAIL_ERROR_NONE;
-    case FROMS:
-    case FROM:
     default:
         /* should be calling mail_setattr() */
         return MAIL_ERROR_PROGRAM;
