@@ -187,7 +187,8 @@ void mail_destroy(struct mail *email) {
     free(email->extra);
     free(email);
 }
-    
+
+/* TODO: Implement fully mbox */
 void mail_serialize(struct mail *email, enum mail_sf format, int sock) {
     int i = 0;
     char ip[46];
@@ -202,7 +203,7 @@ void mail_serialize(struct mail *email, enum mail_sf format, int sock) {
         inet_ntop(a->ss_family, &((struct sockaddr_in *)a)->sin_addr, ip, 46);
     getnameinfo((struct sockaddr *)a, sizeof(*a), hst, sizeof(hst), NULL, 0, 0);
 
-    printf("------\num ok so I just got an email from socket %d!!!", sock);
+    printf("------\num ok so I just got an email from socket %d!!! ", sock);
     printf("here's some info about it:\n");
     printf("real sender server ip: `%s` rDNS:`%s`\n", ip, hst);
     printf("reported sender server: `%s`\n", email->froms_v);

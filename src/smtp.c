@@ -29,7 +29,7 @@ int smtp_handlecode(int code, int fd) {
     case 220:
         return send(fd, server_greeting, server_greeting_len, 0) > 0 ? 0 : 1;
     case 221:
-        return send(fd, "221 BYE\r\n", 9, 0) > 0 ? 1 : 1; /* always close */
+        return send(fd, "221 BYE\r\n", 9, 0) + 2; /* always close */
     case 250:
         return send(fd, "250 OK\r\n", 8, 0) > 0 ? 0 : 1; /* close on error */
     /* 300-family */

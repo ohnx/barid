@@ -50,7 +50,6 @@ void *server_child(void *arg) {
     /* initial values */
     timeout.tv_sec = 300;
     timeout.tv_usec = 0;
-    buf_in_off = 0;
     mail = mail_new();
     stage = HELO;
     srv = NULL;
@@ -61,6 +60,7 @@ void *server_child(void *arg) {
     /* connection info */
     buf_in_off = sizeof(addr);
     getpeername(fd, (struct sockaddr *)&addr, &buf_in_off);
+    buf_in_off = 0;
     if (mail) (mail->extra)->origin_ip = &addr;
 
     /* initial greeting */
@@ -194,20 +194,39 @@ disconnect:
     pthread_exit(NULL);
 }
 
-int main() {
+void print_usage(const char *bin) {
+    printf("mail version `"MAILVER"`\n");
+    printf("Usage: %s <server address> [port]\n", bin);
+    printf("\tserver address is the hostname or IP of the server\n");
+    printf("\t\t(ie, `example.com` or `127.0.0.1`)\n");
+    printf("\tport is the port to listen on (defaults to 25)\n");
+}
+
+int main(int argc, char **argv) {
     /* vars */
     pthread_attr_t attr;
     pthread_t thread;
-    int port, fd_s, *fd_c, fd_ctmp;
+    int port, fd_s, *fd_c;
 
     /* user config */
-    port = 25;
+    if (argc == 2) { /* just server */
+        port = 25;
+    } else if (argc == 3) { /* server + port */
+        port = atoi(argv[2]);
+        if (port < 0 || port > 65535) {
+            print_usage(argv[0]);
+            return 64;
+        }
+    } else { /* some error... */
+        print_usage(argv[0]);
+        return 64;
+    }
 
     /* initial socket setup and stuff */
     server_initsocket(&fd_s);
     if (fd_s < 0) return -1;
 
-    if (smtp_gengreeting("midas.masonx.ca") < 0) {
+    if (smtp_gengreeting(argv[1]) < 0) {
         fprintf(stderr, ERR"System appears to be Out of Memory!\n");
         return -17;
     }
@@ -230,6 +249,7 @@ int main() {
 
     /* loop forever! */
     while (1) {
+        int fd_ctmp;
         /* accept() it */
         if ((fd_ctmp = accept(fd_s, NULL, NULL)) < 0) {
             fprintf(stderr, ERR"Failed to accept() a connection!\n");

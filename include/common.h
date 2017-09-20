@@ -31,7 +31,7 @@ enum server_stage {
 #define MAIL_MAX_DATA_C         16777216
 
 /* version string */
-#define MAILVER "SMTP mail"
+#define MAILVER "SMTP mail v0.1.0b"
 
 /* buffer for a single line of input from a server */
 #define LARGEBUF                4096
