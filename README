@@ -9,9 +9,9 @@ simple mail server written in C for POSIX. get yourself some mail!
 
 output is stdout (mentions IP and stuff, too) or files in a directory (mbox
 format; still WIP). configuration of output is compile-time, sorry! specify the
-port to listen on and the domain at runtime, though (still implementing).
+port to listen on and the domain at runtime, though.
 
-(poorly) multi-threaded!
+((probably) poorly) multi-threaded!
 
 --------------------------------------------------------------------------------
 
@@ -21,6 +21,5 @@ __      ___   ___ _  _ ___ _  _  ___
   \_/\_/_/ \_\_|_\_|\_|___|_|\_|\___|
                                      
 
-this program is probably pretty easy to attack (slow loris, bad data, etc.).
 i'm not very good at security so please don't expect this server to be very
 secure. please exercise caution and make good choices!

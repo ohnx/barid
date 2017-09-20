@@ -16,19 +16,10 @@
 #include "mail.h"
 #include "smtp.h"
 
-struct server {
-    int socket;
-    char *domain;
-    pthread_t thread;
-};
+extern char *server_greeting;
+extern int server_greeting_len;
 
-struct session {
-    struct server *parent;
-    int fd;
-    struct mail *data;
-};
-
-void server_initsocket(struct server *state);
-int server_bindport(struct server *state, int port);
+void server_initsocket(int *fd);
+int server_bindport(int fd, int port);
 
 #endif /* __SERVER_H_INC */

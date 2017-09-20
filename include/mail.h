@@ -20,6 +20,7 @@
 struct mail_internal_info {
     int to_total_len;
     int data_total_len;
+    struct sockaddr_storage *origin_ip;
 };
 
 struct mail {
@@ -59,6 +60,6 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_appenddata(struct mail *email, const char *data);
 void mail_destroy(struct mail *email);
-void mail_serialize(struct mail *email, enum mail_sf f, struct sockaddr_storage *a, int sock);
+void mail_serialize(struct mail *email, enum mail_sf format, int sock);
 
 #endif /* __MAIL_H_INC */

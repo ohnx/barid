@@ -92,7 +92,6 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
 
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
     int data_len, i, t;
-    void *x;
     data_len = strlen(data) + 1;
     t = 0;
 
@@ -116,6 +115,7 @@ int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
 
         /* check there's enough room for this address */
         while (((email->extra)->to_total_len) < (email->to_c + data_len)) {
+            void *x;
             /* reallocate memory */
             (email->extra)->to_total_len *= 2;
 
@@ -148,8 +148,6 @@ int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
 
 int mail_appenddata(struct mail *email, const char *data) {
     int data_len;
-    void *x;
-
     data_len = strlen(data) + 1;
 
     /* make sure we're not trying to append to a readonly email */
@@ -157,6 +155,7 @@ int mail_appenddata(struct mail *email, const char *data) {
 
     /* check there's enough room for this line of data (if not, realloc) */
     while (((email->extra)->data_total_len) < (email->data_c + data_len)) {
+        void *x;
         /* reallocate memory */
         (email->extra)->data_total_len *= 2;
 
@@ -189,19 +188,23 @@ void mail_destroy(struct mail *email) {
     free(email);
 }
     
-void mail_serialize(struct mail *email, enum mail_sf f, struct sockaddr_storage *a, int sock) {
+void mail_serialize(struct mail *email, enum mail_sf format, int sock) {
     int i = 0;
-    char ipstr[INET6_ADDRSTRLEN];
-    char hoststr[NI_MAXHOST];
+    char ip[46];
+    char hst[NI_MAXHOST];
+    struct sockaddr_storage *a;
 
+    /* ip info */
+    a = (email->extra)->origin_ip;
     if (a->ss_family == AF_INET6)
-        inet_ntop(a->ss_family, &((struct sockaddr_in6 *)a)->sin6_addr, ipstr, INET6_ADDRSTRLEN);
+        inet_ntop(a->ss_family, &((struct sockaddr_in6 *)a)->sin6_addr, ip, 46);
     else
-        inet_ntop(a->ss_family, &((struct sockaddr_in *)a)->sin_addr, ipstr, INET6_ADDRSTRLEN);
-    getnameinfo((struct sockaddr *)a, sizeof(*a), hoststr, sizeof(hoststr), NULL, 0, 0);
+        inet_ntop(a->ss_family, &((struct sockaddr_in *)a)->sin_addr, ip, 46);
+    getnameinfo((struct sockaddr *)a, sizeof(*a), hst, sizeof(hst), NULL, 0, 0);
 
-    printf("------\nok so I just got an email from socket %d!!! here's some info about it.\n", sock);
-    printf("real sender server ip: `%s` rDNS:`%s`\n", ipstr, hoststr);
+    printf("------\num ok so I just got an email from socket %d!!!", sock);
+    printf("here's some info about it:\n");
+    printf("real sender server ip: `%s` rDNS:`%s`\n", ip, hst);
     printf("reported sender server: `%s`\n", email->froms_v);
     printf("reported sender email: `%s`\n", email->from_v);
     printf("reported recipients:\n");
@@ -210,5 +213,4 @@ void mail_serialize(struct mail *email, enum mail_sf f, struct sockaddr_storage 
         i += strlen(email->to_v + i);
     }
     printf("data: ```\n%s```\n", email->data_v);
-    printf("that's it.\n");
 }

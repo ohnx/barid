@@ -35,8 +35,5 @@ enum server_stage {
 
 /* buffer for a single line of input from a server */
 #define LARGEBUF                4096
-/* this is the small buffer for output */
-#define SMALLBUF                256
-
 
 #endif /* __COMMON_H_INC */

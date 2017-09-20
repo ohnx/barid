@@ -4,6 +4,7 @@
 #include "common.h"
 #include "server.h"
 
+int smtp_gengreeting(const char *domain);
 int smtp_handlecode(int code, int fd);
 int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail);
 

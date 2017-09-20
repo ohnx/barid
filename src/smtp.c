@@ -1,44 +1,58 @@
-/* There are TODO's in this file. */
 #include "smtp.h"
 
+int smtp_gengreeting(const char *domain) {
+    int numchars_domain, numchars_mailver;
+
+    numchars_domain = strlen(domain);
+    numchars_mailver = strlen(MAILVER);
+
+    /* 7 chars in `220  \r\n`, plus 1 for null */
+    server_greeting_len = 8 + numchars_domain + numchars_mailver;
+
+    /* allocate memory */
+    server_greeting = calloc(server_greeting_len, sizeof(char));
+
+    /* OOM */
+    if (server_greeting == NULL) return -1;
+
+    /* generate server greeting */
+    sprintf(server_greeting, "220 %s %s\r\n", domain, MAILVER);
+
+    /* no error */
+    return 0;
+}
+
 int smtp_handlecode(int code, int fd) {
+    /* the ternary here is to detect if send() had any errors */
     switch (code) {
     /* 200-family */
+    case 220:
+        return send(fd, server_greeting, server_greeting_len, 0) > 0 ? 0 : 1;
     case 221:
-        send(fd, "221 BYE\r\n", 9, 0);
-        return 1;
+        return send(fd, "221 BYE\r\n", 9, 0) > 0 ? 1 : 1; /* always close */
     case 250:
-        send(fd, "250 OK\r\n", 8, 0);
-        return 0;
+        return send(fd, "250 OK\r\n", 8, 0) > 0 ? 0 : 1; /* close on error */
     /* 300-family */
     case 354:
-        send(fd, "354 SEND DATA PLZ!\r\n", 20, 0);
-        return 0;
+        return send(fd, "354 SEND DATA PLZ!\r\n", 20, 0) > 0 ? 0 : 1;
     /* 400-family server-caused error */
     case 450:
-        send(fd, "450 BAD MAILBOX :(\r\n", 20, 0);
-        return 0;
+        return send(fd, "450 BAD MAILBOX :(\r\n", 20, 0) > 0 ? 0 : 1;
     case 451:
-        send(fd, "451 INTERNAL ERROR\r\n", 20, 0);
-        return 0;
+        return send(fd, "451 INTERNAL ERROR\r\n", 20, 0) > 0 ? 0 : 1;
     case 452:
-        send(fd, "452 TOO MANY RCPTS\r\n", 20, 0);
-        return 0;
+        return send(fd, "452 TOO MANY RCPTS\r\n", 20, 0) > 0 ? 0 : 1;
     /* 500-family client-caused error */
     case 500:
-        send(fd, "500 LINE TOO LONG!\r\n", 20, 0);
+        return send(fd, "500 LINE TOO LONG!\r\n", 20, 0) > 0 ? 0 : 1;
     case 501:
-        send(fd, "501 ARGUMENT ERROR\r\n", 20, 0);
-        return 0;
+        return send(fd, "501 ARGUMENT ERROR\r\n", 20, 0) > 0 ? 0 : 1;
     case 502:
-        send(fd, "502 NOTIMPLEMENTED\r\n", 20, 0);
-        return 0;
+        return send(fd, "502 NOTIMPLEMENTED\r\n", 20, 0) > 0 ? 0 : 1;
     case 503:
-        send(fd, "503 WRONG SEQUENCE\r\n", 20, 0);
-        return 0;
+        return send(fd, "503 WRONG SEQUENCE\r\n", 20, 0) > 0 ? 0 : 1;
     case 522:
-        send(fd, "522 TOO MANY DATA!\r\n", 20, 0);
-        return 0;
+        return send(fd, "522 TOO MANY DATA!\r\n", 20, 0) > 0 ? 0 : 1;
     /* Unknown??!? */
     default:
         return 0;
@@ -92,7 +106,10 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         } else if (i == MAIL_ERROR_OOM) { /* server out of memory */
             return 451;
         } else if (i == MAIL_ERROR_PROGRAM) { /* program error */
-            /* TODO: HANDLE THIS */
+            fprintf(stderr, ERR"The programmer has made an error... ");
+            fprintf(stderr, "(%s:%d) %s\n", __FILE__, __LINE__, MAILVER);
+            fprintf(stderr, ERR"Please report this!\n");
+            exit(-112);
         }
 
         /* update stage */
@@ -111,7 +128,10 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         } else if (i == MAIL_ERROR_OOM) { /* server out of memory */
             return 451;
         } else if (i == MAIL_ERROR_PROGRAM) { /* program error */
-            /* TODO: HANDLE THIS */
+            fprintf(stderr, ERR"The programmer has made an error... ");
+            fprintf(stderr, "(%s:%d) %s\n", __FILE__, __LINE__, MAILVER);
+            fprintf(stderr, ERR"Please report this!\n");
+            exit(-134);
         }
 
         /* update stage */
@@ -135,7 +155,10 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         } else if (i == MAIL_ERROR_RCPTMAX) { /* too many recipients */
             return 452;
         } else if (i == MAIL_ERROR_PROGRAM) { /* program error */
-            /* TODO: HANDLE THIS */
+            fprintf(stderr, ERR"The programmer has made an error... ");
+            fprintf(stderr, "(%s:%d) %s\n", __FILE__, __LINE__, MAILVER);
+            fprintf(stderr, ERR"Please report this!\n");
+            exit(-161);
         }
 
         /* update stage */
