@@ -18,6 +18,9 @@ int smtp_gengreeting(const char *domain) {
     /* generate server greeting */
     sprintf(server_greeting, "220 %s %s\r\n", domain, MAILVER);
 
+    /* WE DO NOT ACTUALLY WANT TO SEND THE NULL!!! REMOVE IT FROM COUNT */
+    server_greeting_len--;
+
     /* no error */
     return 0;
 }

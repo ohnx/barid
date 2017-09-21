@@ -1,4 +1,3 @@
-/* This file has TODO's. */
 #include "server.h"
 
 char *server_greeting;
@@ -95,7 +94,7 @@ void *server_child(void *arg) {
 		}
 
         /* null-terminate data */
-        buf_in[rcn] = 0; /* null terminate the end string! :D */
+        buf_in[buf_in_off + rcn] = 0; /* null terminate the end string! :D */
 
         /* update the offset */
         lns = buf_in;
@@ -170,10 +169,6 @@ void *server_child(void *arg) {
         /* update data offsets and buffer */
         memmove(buf_in, lns, LARGEBUF - (lns - buf_in));
         buf_in_off -= (lns - buf_in);
-
-        /* do something magical that I have no idea what it does but it works */
-        /* TODO: figure out what's going on here */
-        if (stage == END_DATA) buf_in_off = 0;
     }
 disconnect:
     if (mail != NULL) {
