@@ -19,15 +19,15 @@ struct mail *mail_new_internal(int hasExtra) {
         }
 
         /* initial allocations for expandable buffers */
-        (email->extra)->to_total_len = 256;
-        email->to_v = calloc(256, 1);
+        (email->extra)->to_total_len = 128;
+        email->to_v = calloc(128, 1);
         if (email->to_v == NULL) {
             free(email->extra);
             free(email);
             return NULL;
         }
-        (email->extra)->data_total_len = 512;
-        email->data_v = calloc(512, 1);
+        (email->extra)->data_total_len = 256;
+        email->data_v = calloc(256, 1);
         if (email->data_v == NULL) {
             free(email->extra);
             free(email);
@@ -40,7 +40,7 @@ struct mail *mail_new_internal(int hasExtra) {
 
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
     int data_len, i, t;
-    data_len = strlen(data) + 1;
+    data_len = strlen(data) + 1; /* include null */
     t = 0;
 
     switch(attr) {
@@ -65,12 +65,15 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
         if (!(*data == '<' && data[data_len-2] == '>')) return MAIL_ERROR_PARSE;
 
         /* ensure exactly at least one @ symbol present */
-        for (i = 0; i < data_len-1; i++)
+        for (i = 0; i < data_len-1; i++) {
             if (data[i] == '@') t++;
+            /* Newlines are not allowed in the mail FROM */
+            if (data[i] == '\n') return MAIL_ERROR_INVALIDEMAIL;
+        }
         if (t < 1) return MAIL_ERROR_PARSE;
 
         /* for a FROM email, that's all the checking we will do. */
-        email->from_c = data_len;
+        email->from_c = data_len - 2; /* subtract the '<' and '>' */
         email->from_v = malloc(data_len - 2); /* subtract the <> */
 
         /* successful allocation check */
@@ -91,24 +94,30 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
 }
 
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
-    int data_len, i, t;
+    int data_len, i;
+    const char *atpos;
     data_len = strlen(data) + 1;
-    t = 0;
+    atpos = NULL;
 
     switch(attr) {
     case TO:
         /* ensure brackets around email (if not, return error) */
         if (!(*data == '<' && data[data_len-2] == '>')) return MAIL_ERROR_PARSE;
 
-        /* TODO: ensure valid domain */
-
         /* ensure valid TO address */
+        /* starting with a dot is not allowed */
+        if (data[1] == '.') return MAIL_ERROR_INVALIDEMAIL;
         for (i = 0; i < data_len-1; i++) {
-            if (data[i] == '@') t++;
+            if (data[i] == '@') atpos = data + i;
             /* forward slashes not allowed */
             if (data[i] == '/') return MAIL_ERROR_INVALIDEMAIL;
         }
-        if (t < 1) return MAIL_ERROR_PARSE;
+        if (atpos == NULL) return MAIL_ERROR_PARSE;
+
+        /* ensure valid domain */
+        if(strncmp(server_hostname, atpos+1, server_hostname_len)) {
+            return MAIL_ERROR_USRNOTLOCAL;
+        }
 
         /* make sure we're not trying to append to a readonly email */
         if (email->extra == NULL) return MAIL_ERROR_PROGRAM;
@@ -148,7 +157,17 @@ int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
 
 int mail_appenddata(struct mail *email, const char *data) {
     int data_len;
+    char appB;
+
+    /* Replace .. with single . */
+    if (*data == '.') data++;
+
+    /* get data length */
     data_len = strlen(data) + 1;
+    
+    /* Need to add a '>' to 'From ' (there is corruption here, oops) */
+    appB = !strncmp(data, "From ", 5);
+    if (appB) data_len++;
 
     /* make sure we're not trying to append to a readonly email */
     if (email->extra == NULL) return MAIL_ERROR_PROGRAM;
@@ -170,7 +189,13 @@ int mail_appenddata(struct mail *email, const char *data) {
     }
 
     /* copy data over */
-    memcpy(email->data_v + email->data_c, data, data_len);
+    if (!appB)
+        memcpy(email->data_v + email->data_c, data, data_len);
+    else {
+        /* Need to add a '>' to 'From ' (there is corruption here, oops) */
+        memcpy(email->data_v + email->data_c + 1, data, data_len - 1);
+        *(email->data_v + email->data_c) = '>';
+    }
 
     /* update bytes used */
     email->data_c += data_len - 1; /* we want the next copy to overwrite NULL */
@@ -186,32 +211,4 @@ void mail_destroy(struct mail *email) {
     free(email->data_v);
     free(email->extra);
     free(email);
-}
-
-/* TODO: Implement fully mbox */
-void mail_serialize(struct mail *email, enum mail_sf format, int sock) {
-    int i = 0;
-    char ip[46];
-    char hst[NI_MAXHOST];
-    struct sockaddr_storage *a;
-
-    /* ip info */
-    a = (email->extra)->origin_ip;
-    if (a->ss_family == AF_INET6)
-        inet_ntop(a->ss_family, &((struct sockaddr_in6 *)a)->sin6_addr, ip, 46);
-    else
-        inet_ntop(a->ss_family, &((struct sockaddr_in *)a)->sin_addr, ip, 46);
-    getnameinfo((struct sockaddr *)a, sizeof(*a), hst, sizeof(hst), NULL, 0, 0);
-
-    printf("------\num ok so I just got an email from socket %d!!! ", sock);
-    printf("here's some info about it:\n");
-    printf("real sender server ip: `%s` rDNS:`%s`\n", ip, hst);
-    printf("reported sender server: `%s`\n", email->froms_v);
-    printf("reported sender email: `%s`\n", email->from_v);
-    printf("reported recipients:\n");
-    for (i = 0; i < email->to_c; i++) {
-        printf("\t`%s`\n", email->to_v + i);
-        i += strlen(email->to_v + i);
-    }
-    printf("data: ```\n%s```\n", email->data_v);
 }

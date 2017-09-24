@@ -1,8 +1,9 @@
-/* This file has TODO's. */
 #include "server.h"
 
 char *server_greeting;
 int server_greeting_len;
+const char *server_hostname;
+int server_hostname_len;
 
 void server_initsocket(int *fd) {
     int on = 1;
@@ -42,7 +43,7 @@ void *server_child(void *arg) {
     char buf_in[LARGEBUF], *srv;
     struct timeval timeout;
     enum server_stage stage;
-    int rcn, fd;
+    int rcn, fd, deliver_status;
     unsigned int buf_in_off;
     struct mail *mail;
     struct sockaddr_storage addr;
@@ -95,7 +96,7 @@ void *server_child(void *arg) {
 		}
 
         /* null-terminate data */
-        buf_in[rcn] = 0; /* null terminate the end string! :D */
+        buf_in[buf_in_off + rcn] = 0; /* null terminate the end string! :D */
 
         /* update the offset */
         lns = buf_in;
@@ -129,17 +130,21 @@ void *server_child(void *arg) {
                 /* smtp_handlecode returns 1 when server should quit */
                 if (smtp_handlecode(smtp_parsel(lns, &stage, mail), fd))
                         goto disconnect;
-                if (stage == MAIL)
+                if (stage == MAIL && srv == NULL)
                     srv = strdup(mail->froms_v);
             } else { /* processing message data */
                 /* check for end of data */
                 if (!strcmp(lns, ".")) {
-                    /* end of data! send OK message and set status to MAIL */
-                    smtp_handlecode(250, fd);
-                    stage = MAIL;
+                    /* print out this mail's info (aka `deliver` it) */
+                    deliver_status = mail_serialize(mail, BOTH);
 
-                    /* print out this mail's info */
-                    mail_serialize(mail, STDOUT, fd);
+                    /* end of data! send message and set status to MAIL */
+                    if (!deliver_status) smtp_handlecode(250, fd);
+                    else smtp_handlecode(422, fd);
+
+                    /* end of data! send OK message and set status to MAIL */
+                    
+                    stage = MAIL;
 
                     /* reset the mail */
                     mail_destroy(mail);
@@ -170,17 +175,13 @@ void *server_child(void *arg) {
         /* update data offsets and buffer */
         memmove(buf_in, lns, LARGEBUF - (lns - buf_in));
         buf_in_off -= (lns - buf_in);
-
-        /* do something magical that I have no idea what it does but it works */
-        /* TODO: figure out what's going on here */
-        if (stage == END_DATA) buf_in_off = 0;
     }
 disconnect:
     if (mail != NULL) {
         /* make sure the email was filled */
         if (mail->from_c > 0) {
             (mail->extra)->origin_ip = &addr;
-            mail_serialize(mail, STDOUT, fd);
+            mail_serialize(mail, BOTH);
         }
 
         /* Clean up */
@@ -226,7 +227,10 @@ int main(int argc, char **argv) {
     server_initsocket(&fd_s);
     if (fd_s < 0) return -1;
 
-    if (smtp_gengreeting(argv[1]) < 0) {
+    server_hostname = argv[1];
+    server_hostname_len = strlen(server_hostname);
+
+    if (smtp_gengreeting() < 0) {
         fprintf(stderr, ERR"System appears to be Out of Memory!\n");
         return -17;
     }

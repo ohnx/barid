@@ -1,2 +1,3 @@
 objs/
 mail
+*.so

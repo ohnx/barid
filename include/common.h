@@ -14,6 +14,7 @@
 #define WARN "["KYEL"!"RESET"] "
 #define ERR "["KRED"!"RESET"] "
 
+/* server stage */
 enum server_stage {
     HELO,
     MAIL,
@@ -23,9 +24,33 @@ enum server_stage {
     QUIT
 };
 
+/* this struct holds internal info */
+struct mail_internal_info {
+    int to_total_len;
+    int data_total_len;
+    struct sockaddr_storage *origin_ip;
+};
+
+struct mail {
+    /* the server that this mail is from */
+    int froms_c;
+    char *froms_v;
+    /* the email address that this mail is from */
+    int from_c;
+    char *from_v;
+    /* email addresses this email is to */
+    int to_c; /* total length of email address string */
+    char *to_v; /* null-separated array of to email addresses */
+    /* message data */
+    int data_c;
+    char *data_v;
+    /* extra information (a null `extra` indicates this email is READONLY) */
+    struct mail_internal_info *extra;
+};
+
 /* max length of an email's recipients (in bytes)
- * 1024 recipients @ 256 bytes per email = 262144 B (256 KiB) */
-#define MAIL_MAX_TO_C           262144
+ * 512 recipients @ 256 bytes per email = 131072 B (128 KiB) */
+#define MAIL_MAX_TO_C           131072
 
 /* max length of an email (in bytes) - default is 16777216 B (16 MiB) */
 #define MAIL_MAX_DATA_C         16777216

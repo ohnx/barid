@@ -1,13 +1,8 @@
 #include "smtp.h"
 
-int smtp_gengreeting(const char *domain) {
-    int numchars_domain, numchars_mailver;
-
-    numchars_domain = strlen(domain);
-    numchars_mailver = strlen(MAILVER);
-
-    /* 7 chars in `220  \r\n`, plus 1 for null */
-    server_greeting_len = 8 + numchars_domain + numchars_mailver;
+int smtp_gengreeting() {
+    /* 7 chars in `220  \r\n`, plus 1 for null = 8 */
+    server_greeting_len = 8 + server_hostname_len + strlen(MAILVER);
 
     /* allocate memory */
     server_greeting = calloc(server_greeting_len, sizeof(char));
@@ -16,7 +11,10 @@ int smtp_gengreeting(const char *domain) {
     if (server_greeting == NULL) return -1;
 
     /* generate server greeting */
-    sprintf(server_greeting, "220 %s %s\r\n", domain, MAILVER);
+    sprintf(server_greeting, "220 %s %s\r\n", server_hostname, MAILVER);
+
+    /* WE DO NOT ACTUALLY WANT TO SEND THE NULL!!! REMOVE IT FROM COUNT */
+    server_greeting_len--;
 
     /* no error */
     return 0;
@@ -36,6 +34,8 @@ int smtp_handlecode(int code, int fd) {
     case 354:
         return send(fd, "354 SEND DATA PLZ!\r\n", 20, 0) > 0 ? 0 : 1;
     /* 400-family server-caused error */
+    case 422:
+        return send(fd, "422 MAILBOX FULL!!\r\n", 20, 0) > 0 ? 0 : 1;
     case 450:
         return send(fd, "450 BAD MAILBOX :(\r\n", 20, 0) > 0 ? 0 : 1;
     case 451:
@@ -52,7 +52,9 @@ int smtp_handlecode(int code, int fd) {
     case 503:
         return send(fd, "503 WRONG SEQUENCE\r\n", 20, 0) > 0 ? 0 : 1;
     case 522:
-        return send(fd, "522 TOO MANY DATA!\r\n", 20, 0) > 0 ? 0 : 1;
+        return send(fd, "522 TOO MUCH DATA!\r\n", 20, 0) > 0 ? 0 : 1;
+    case 550:
+        return send(fd, "550 USER NOT LOCAL\r\n", 20, 0) > 0 ? 0 : 1;
     /* Unknown??!? */
     default:
         return 0;
@@ -154,6 +156,8 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
                          * a restriction set by `mail`, not by rfc's. */
         } else if (i == MAIL_ERROR_RCPTMAX) { /* too many recipients */
             return 452;
+        } else if (i == MAIL_ERROR_USRNOTLOCAL) {
+            return 550;
         } else if (i == MAIL_ERROR_PROGRAM) { /* program error */
             fprintf(stderr, ERR"The programmer has made an error... ");
             fprintf(stderr, "(%s:%d) %s\n", __FILE__, __LINE__, MAILVER);
