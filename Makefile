@@ -2,7 +2,7 @@ INCLUDES=-Iinclude/
 LIBS=-lpthread
 CFLAGS=$(INCLUDES) -Wall -Werror -pedantic -g -O0
 
-OBJ=objs/smtp.o objs/mail.o objs/server.o
+OBJ=objs/smtp.o objs/mail.o objs/server.o objs/mail_serialize.o
 OUTPUT=mail
 
 ################################################################################
