@@ -8,8 +8,8 @@
 simple mail server written in C for POSIX. get yourself some mail!
 
 output is stdout (mentions IP and stuff, too) or files in a directory (mbox
-format; still WIP). configuration of output is compile-time, sorry! specify the
-port to listen on and the domain at runtime, though.
+format). for help on how to specify output type, server name, and listening
+port, please run the command.
 
 ((probably) poorly) multi-threaded!
 

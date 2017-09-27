@@ -4,6 +4,7 @@ char *server_greeting;
 int server_greeting_len;
 const char *server_hostname;
 int server_hostname_len;
+enum mail_sf server_sf;
 
 void server_initsocket(int *fd) {
     int on = 1;
@@ -44,7 +45,7 @@ void *server_child(void *arg) {
     struct timeval timeout;
     enum server_stage stage;
     int rcn, fd, deliver_status;
-    unsigned int buf_in_off;
+    unsigned int buf_in_off, xaddr;
     struct mail *mail;
     struct sockaddr_storage addr;
 
@@ -54,14 +55,14 @@ void *server_child(void *arg) {
     mail = mail_new();
     stage = HELO;
     srv = NULL;
+    buf_in_off = 0;
 
     /* extract the required data from args */
     fd = *((int *)arg);
 
     /* connection info */
-    buf_in_off = sizeof(addr);
-    getpeername(fd, (struct sockaddr *)&addr, &buf_in_off);
-    buf_in_off = 0;
+    xaddr = sizeof(addr);
+    if (getpeername(fd, (struct sockaddr *)&addr, &xaddr) < 0) goto disconnect;
     if (mail) (mail->extra)->origin_ip = &addr;
 
     /* initial greeting */
@@ -136,7 +137,7 @@ void *server_child(void *arg) {
                 /* check for end of data */
                 if (!strcmp(lns, ".")) {
                     /* print out this mail's info (aka `deliver` it) */
-                    deliver_status = mail_serialize(mail, BOTH);
+                    deliver_status = mail_serialize(mail, server_sf);
 
                     /* end of data! send message and set status to MAIL */
                     if (!deliver_status) smtp_handlecode(250, fd);
@@ -181,7 +182,7 @@ disconnect:
         /* make sure the email was filled */
         if (mail->from_c > 0) {
             (mail->extra)->origin_ip = &addr;
-            mail_serialize(mail, BOTH);
+            mail_serialize(mail, server_sf);
         }
 
         /* Clean up */
@@ -197,24 +198,62 @@ disconnect:
 
 void print_usage(const char *bin) {
     printf("mail version `"MAILVER"`\n");
-    printf("Usage: %s <server address> [port]\n", bin);
+    printf("Usage: %s <server address> [output format] [port]\n", bin);
     printf("\tserver address is the hostname or IP of the server\n");
     printf("\t\t(ie, `example.com` or `127.0.0.1`)\n");
+    printf("\t\tMails that are not at the hostname will be rejected.\n");
+    printf("\t\tTo allow mails to any dest server, specify the address '*'.\n");
+    printf("\toutput format is how mail will be processed.\n");
+    printf("\t\tSTDOUT - print out all emails, plus sender info, to STDOUT\n");
+    printf("\t\tMBOX - output all emails in MBOX format to files\n");
+    printf("\t\tBOTH - perform the operations of both STDOUT and MBOX\n");
     printf("\tport is the port to listen on (defaults to 25)\n");
 }
+
+int parse_arg(const char *v) {
+    switch (*v) {
+    case 'S':
+        server_sf = STDOUT;
+        break;
+    case 'M':
+        server_sf = MAILBOX;
+        break;
+    case 'B':
+        server_sf = BOTH;
+        break;
+    default:
+        return atoi(v);
+    }
+    return 0;
+}
+
+const char *sf_strs[5] = {"STDOUT", "ERR", "BINARY", "MAILBOX", "BOTH"};
 
 int main(int argc, char **argv) {
     /* vars */
     pthread_attr_t attr;
     pthread_t thread;
-    int port, fd_s, *fd_c;
+    int fd_s, *fd_c, port;
+
+    server_sf = BOTH;
 
     /* user config */
     if (argc == 2) { /* just server */
         port = 25;
-    } else if (argc == 3) { /* server + port */
-        port = atoi(argv[2]);
+    } else if (argc == 3) { /* server + port or server + string */
+        port = parse_arg(argv[2]);
         if (port < 0 || port > 65535) {
+            print_usage(argv[0]);
+            return 64;
+        }
+        if (port == 0) port = 25; /* it was server + string */
+    } else if (argc == 4) {
+        if (parse_arg(argv[2]) != 0) { /* parse string */
+            print_usage(argv[0]);
+            return 64;
+        }
+        port = parse_arg(argv[3]);
+        if (port < 0 || port > 65535) { /* parse port */
             print_usage(argv[0]);
             return 64;
         }
@@ -222,6 +261,11 @@ int main(int argc, char **argv) {
         print_usage(argv[0]);
         return 64;
     }
+
+    fprintf(stderr, INFO"%s starting!\n", MAILVER);
+    fprintf(stderr, INFO"Accepting mails to `%s`; ", argv[1]);
+    fprintf(stderr, "Listening on port %d; ", port);
+    fprintf(stderr, "Output format `%s`\n", sf_strs[server_sf-1]);
 
     /* initial socket setup and stuff */
     server_initsocket(&fd_s);

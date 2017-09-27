@@ -114,8 +114,9 @@ int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
         }
         if (atpos == NULL) return MAIL_ERROR_PARSE;
 
-        /* ensure valid domain */
-        if(strncmp(server_hostname, atpos+1, server_hostname_len)) {
+        /* ensure valid domain (* = wildcard listen) */
+        if (*server_hostname != '*' &&
+            strncmp(server_hostname, atpos+1, server_hostname_len)) {
             return MAIL_ERROR_USRNOTLOCAL;
         }
 

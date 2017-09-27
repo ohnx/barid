@@ -4,6 +4,7 @@
 #ifdef __linux__
 #define KRED  "\x1B[31m"
 #define KYEL  "\x1B[33m"
+#define KBLU  "\x1B[34m"
 #define RESET "\033[0m"
 #else
 #define KRED  ""
@@ -11,6 +12,7 @@
 #define RESET ""
 #endif
 
+#define INFO "["KBLU"!"RESET"] "
 #define WARN "["KYEL"!"RESET"] "
 #define ERR "["KRED"!"RESET"] "
 
@@ -56,7 +58,7 @@ struct mail {
 #define MAIL_MAX_DATA_C         16777216
 
 /* version string */
-#define MAILVER "SMTP mail v0.1.0b"
+#define MAILVER "SMTP mail v0.1.0d"
 
 /* buffer for a single line of input from a server */
 #define LARGEBUF                4096
