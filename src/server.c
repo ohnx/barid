@@ -6,6 +6,13 @@ const char *server_hostname;
 int server_hostname_len;
 enum mail_sf server_sf;
 
+static char *_m_strdup(const char *x) {
+    int l = strlen(x) + 1;
+    char *p = malloc(l*sizeof(char));
+    memcpy(p, x, l);
+    return p;
+}
+
 void server_initsocket(int *fd) {
     int on = 1;
     /* make a socket */
@@ -132,7 +139,7 @@ void *server_child(void *arg) {
                 if (smtp_handlecode(smtp_parsel(lns, &stage, mail), fd))
                         goto disconnect;
                 if (stage == MAIL && srv == NULL)
-                    srv = strdup(mail->froms_v);
+                    srv = _m_strdup(mail->froms_v);
             } else { /* processing message data */
                 /* check for end of data */
                 if (!strcmp(lns, ".")) {

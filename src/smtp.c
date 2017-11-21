@@ -64,9 +64,9 @@ int smtp_handlecode(int code, int fd) {
 int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
     int i, line_len;
 
-    /* convert to upper case if it's in lower case */
+    /* convert verb to upper case if it's in lower case */
     for (i = 0; i < 4; i++) {
-        if (line[i] >= 'a' && line[i] < 'z') {
+        if (line[i] >= 'a' && line[i] <= 'z') {
             line[i] -= 32;
         }
     }

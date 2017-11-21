@@ -43,6 +43,32 @@ int mail_serialize_stdout(struct mail *email) {
     return 0;
 }
 
+void ms_chmod(const char *out_name) {
+    uid_t          uid;
+    gid_t          gid;
+    struct passwd *pwd;
+    struct group  *grp;
+
+    /* get user id */
+    pwd = getpwnam(out_name);
+    if (pwd == NULL) {
+        return;
+    }
+    uid = pwd->pw_uid;
+
+    /* get group id */
+    grp = getgrnam(out_name);
+    if (grp == NULL) {
+        return;
+    }
+    gid = grp->gr_gid;
+
+    /* do the actual chown */
+    if (chown(out_name, uid, gid) == -1) {
+        return;
+    }
+}
+
 int mail_serialize_file(struct mail *email) {
     char *at_loc, *fo, *fo_o, *from_fix, *cps;
     char timebuf[26];
@@ -91,6 +117,10 @@ int mail_serialize_file(struct mail *email) {
 
         /* close file + clean up */
         if (fclose(fp) != 0) goto error;
+
+        /* chown the file */
+        ms_chmod(fo);
+
         free(fo_o);
         fo_o = NULL;
 

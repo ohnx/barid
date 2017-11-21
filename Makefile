@@ -1,19 +1,26 @@
 INCLUDES=-Iinclude/
-LIBS=-lpthread
-CFLAGS=$(INCLUDES) -Wall -Werror -pedantic -g -O0
+LIBS=-lpthread -Ldist/ -lmbedtls
+CFLAGS=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic
 
 OBJ=objs/smtp.o objs/mail.o objs/server.o objs/mail_serialize.o
 OUTPUT=mail
+
+default: $(OUTPUT)
 
 ################################################################################
 #                                SOURCES STUFF                                 #
 ################################################################################
 
+dist/libmbedtls.a:
+	-@git submodule update --init --recursive
+	$(MAKE) no_test -C dist/mbedtls
+	cp dist/mbedtls/library/*.a dist/
+
 objs/%.o: src/%.c
 	@mkdir -p objs/
 	$(CC) -c -o $@ $< $(CFLAGS) $(EXTRA)
 
-$(OUTPUT): $(OBJ)
+$(OUTPUT): dist/libmbedtls.a $(OBJ)
 	$(CC) $^ -o $@ $(LIBS)
 
 debug/hook_net.so: debug/hook_net.c
@@ -32,3 +39,4 @@ clean:
 	-rm -f $(OBJ)
 	-rm -f $(OUTPUT)
 	$(MAKE) clean -C debug/
+	$(MAKE) clean -C dist/mbedtls

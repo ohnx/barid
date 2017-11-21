@@ -8,6 +8,10 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <grp.h>
+#include <sys/socket.h>
 
 #define MAIL_ERROR_NONE         0
 #define MAIL_ERROR_PARSE        1
