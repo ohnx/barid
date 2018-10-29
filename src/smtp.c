@@ -1,22 +1,40 @@
 #include "smtp.h"
 
 int smtp_gengreeting() {
+    char *ptr = server_hostname, *smtp_host = server_hostname, og;
+
+    /* get first hostname in server_hostname */
+    do {
+        if (*ptr == ',') break;
+    } while (*(ptr++) != '\0');
+    /* need to backtrack if we went over the string end */
+    if (*(ptr-1) == '\0') ptr--;
+
+    /* check if we are doing a wildcard or if it's a specific hostname*/
+    og = *ptr;
+    if (ptr == server_hostname) smtp_host = "example.com";
+    else *ptr = '\0';
+
     /* 7 chars in `220  \r\n`, plus 1 for null = 8 */
-    server_greeting_len = 8 + server_hostname_len + strlen(MAILVER);
+    server_greeting_len = 8 + strlen(smtp_host) + strlen(MAILVER);
 
     /* allocate memory */
     server_greeting = calloc(server_greeting_len, sizeof(char));
 
     /* OOM */
-    if (server_greeting == NULL) return -1;
+    if (server_greeting == NULL) {
+        *ptr = og;
+        return -1;
+    }
 
     /* generate server greeting */
-    sprintf(server_greeting, "220 %s %s\r\n", server_hostname, MAILVER);
+    sprintf(server_greeting, "220 %s %s\r\n", smtp_host, MAILVER);
 
     /* WE DO NOT ACTUALLY WANT TO SEND THE NULL!!! REMOVE IT FROM COUNT */
     server_greeting_len--;
 
     /* no error */
+    *ptr = og;
     return 0;
 }
 

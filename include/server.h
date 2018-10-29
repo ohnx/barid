@@ -19,8 +19,7 @@
 
 extern char *server_greeting;
 extern int server_greeting_len;
-extern const char *server_hostname;
-extern int server_hostname_len;
+extern char *server_hostname;
 
 void server_initsocket(int *fd);
 int server_bindport(int fd, int port);

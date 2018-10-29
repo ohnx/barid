@@ -31,6 +31,7 @@ enum mail_attr {
 
 /* serialize output format */
 enum mail_sf {
+    NONE = 0,
     STDOUT = 1,
     BINARY = 3,
     MAILBOX = 4,

@@ -1,6 +1,6 @@
 INCLUDES=-Iinclude/
 LIBS=-lpthread -Ldist/ -lmbedtls
-CFLAGS=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic
+CFLAGS=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic -g -O0
 
 OBJ=objs/smtp.o objs/mail.o objs/server.o objs/mail_serialize.o
 OUTPUT=mail
@@ -32,7 +32,7 @@ debugnet: $(OUTPUT) debug/hook_net.so
 
 .PHONY: debug
 debug: $(OUTPUT)
-	valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT)
+	valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT) -p 2525 example.com example.org example.net -s
 
 .PHONY: clean
 clean:

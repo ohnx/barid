@@ -1,6 +1,4 @@
-/* There are TODO's in this file. */
 #include "mail.h"
-/*https://serverfault.com/tags/mbox/info*/
 
 struct mail *mail_new_internal(int hasExtra) {
     struct mail *email;
@@ -93,6 +91,36 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
     }
 }
 
+int mail_checkinlist(const char *str, char *list, size_t len) {
+    char *ptr = server_hostname, *start = server_hostname;
+
+    /* loop through hostnames in server_hostname */
+    do {
+        if (*ptr == ',') {
+            /* found end of hostname */
+            *ptr = '\0';
+
+            /* return if equal */
+            if (!strncmp(str, start, len)) {
+                *ptr = ',';
+                return 1;
+            }
+
+            /* not equal, keep searching */
+            start = ptr + 1;
+            *ptr = ',';
+        }
+    } while (*(ptr++) != '\0');
+
+    /* need to backtrack if we went over the string end */
+    if (*(ptr-1) == '\0') ptr--;
+
+    /* last chance, maybe the last hostname is the right one */
+    if (!strncmp(str, start, len)) return 1;
+
+    return 0;
+}
+
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
     int data_len, i;
     const char *atpos;
@@ -114,9 +142,9 @@ int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
         }
         if (atpos == NULL) return MAIL_ERROR_PARSE;
 
-        /* ensure valid domain (* = wildcard listen) */
-        if (*server_hostname != '*' &&
-            strncmp(server_hostname, atpos+1, server_hostname_len)) {
+        /* temporarily remove the trailing '>' */
+        /* ensure valid domain (*server_hostname = '\0' = wildcard listen) */
+        if (*server_hostname != '\0' && !mail_checkinlist(atpos+1, server_hostname, data_len-(atpos-data)-3)) {
             return MAIL_ERROR_USRNOTLOCAL;
         }
 

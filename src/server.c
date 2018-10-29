@@ -2,8 +2,7 @@
 
 char *server_greeting;
 int server_greeting_len;
-const char *server_hostname;
-int server_hostname_len;
+char *server_hostname;
 enum mail_sf server_sf;
 
 static char *_m_strdup(const char *x) {
@@ -203,83 +202,112 @@ disconnect:
     pthread_exit(NULL);
 }
 
-void print_usage(const char *bin) {
-    printf("mail version `"MAILVER"`\n");
-    printf("Usage: %s <server address> [output format] [port]\n", bin);
-    printf("\tserver address is the hostname or IP of the server\n");
-    printf("\t\t(ie, `example.com` or `127.0.0.1`)\n");
-    printf("\t\tMails that are not at the hostname will be rejected.\n");
-    printf("\t\tTo allow mails to any dest server, specify the address '*'.\n");
-    printf("\toutput format is how mail will be processed.\n");
-    printf("\t\tSTDOUT - print out all emails, plus sender info, to STDOUT\n");
-    printf("\t\tMBOX - output all emails in MBOX format to files\n");
-    printf("\t\tBOTH - perform the operations of both STDOUT and MBOX\n");
-    printf("\tport is the port to listen on (defaults to 25)\n");
+void print_usage(const char *bin, const char *msg) {
+    fprintf(stderr, "mail version `"MAILVER"`\n");
+    if (msg) fprintf(stderr, "Error: %s\n", msg);
+    fprintf(stderr, "Usage: %s [-p port] [-s] [-m mbox directory] <host>\n", bin);
+    fprintf(stderr, "\t-p\tthe port to listen on (defaults to 25)\n");
+    fprintf(stderr, "\t-s\toutput all mails to STDOUT\n");
+    fprintf(stderr, "\t-m\toutput all mails, in MBOX format, to mbox directory\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\thost:\tserver hostname or IP (e.g., `example.com` or `127.0.0.1`)\n");
+    fprintf(stderr, "\t\tMails that are not at the hostnames will be rejected.\n");
+    fprintf(stderr, "\t\tTo allow mails to multiple servers, simply specify more server hosts\n");
+    fprintf(stderr, "\t\tTo allow mails to any server, do not specify a host.\n");
+    fprintf(stderr, "\t\tFirst hostname given will be used to reply, unless none is given (defaults to example.com).\n");
 }
 
-int parse_arg(const char *v) {
-    switch (*v) {
-    case 'S':
-        server_sf = STDOUT;
-        break;
-    case 'M':
-        server_sf = MAILBOX;
-        break;
-    case 'B':
-        server_sf = BOTH;
-        break;
-    default:
-        return atoi(v);
+char *arr2str(char *const *astr, size_t alen) {
+    int i = 0;
+    size_t buf_len = 8, buf_used = 0, str_len;
+    char *buf, *tmp;
+    const char *str;
+    buf = malloc(sizeof(char) * buf_len);
+    if (!buf) return NULL;
+
+    /* loop through all of the elements of the array and join them with a comma */
+    for (i = 0; i < alen; i++) {
+        str = astr[i];
+        str_len = strlen(str) + 1;
+
+        /* realloc until sufficient memory */
+        while (str_len+buf_used > buf_len) {
+            buf_len *= 2;
+            tmp = realloc(buf, sizeof(char) * buf_len);
+            if (!tmp) { free(buf); return NULL; }
+            buf = tmp;
+        }
+
+        /* copy over data */
+        memcpy(buf+buf_used, str, str_len-1);
+        buf_used += str_len;
+        /* add comma delimiter */
+        buf[buf_used-1] = ',';
     }
-    return 0;
+
+    /* check to prevent memory errors */
+    if (buf_used == 0) buf_used = 1;
+    buf[buf_used-1] = '\0';
+    return buf;
 }
 
-const char *sf_strs[5] = {"STDOUT", "ERR", "BINARY", "MAILBOX", "BOTH"};
+const char *sf_strs[6] = {"NONE", "STDOUT", "ERR", "BINARY", "MAILBOX", "BOTH"};
 
 int main(int argc, char **argv) {
     /* vars */
     pthread_attr_t attr;
     pthread_t thread;
-    int fd_s, *fd_c, port;
+    int fd_s, *fd_c, port = 25, opt;
 
-    server_sf = BOTH;
+    server_sf = NONE;
 
-    /* user config */
-    if (argc == 2) { /* just server */
-        port = 25;
-    } else if (argc == 3) { /* server + port or server + string */
-        port = parse_arg(argv[2]);
-        if (port < 0 || port > 65535) {
-            print_usage(argv[0]);
-            return 64;
+    /* parse arguments */
+    while ((opt = getopt(argc, argv, "p:sm:")) != -1) {
+        switch (opt) {
+        case 'p':
+            /* port */
+            port = atoi(optarg);
+            if (port < 0 || port > 65535) {
+                print_usage(argv[0], "invalid port specified");
+                return 64;
+            }
+            break;
+        case 's':
+            /* stdout */
+            if (server_sf == MAILBOX)
+                server_sf = BOTH;
+            else
+                server_sf = STDOUT;
+            break;
+        case 'm':
+            /* maildir */
+            if (chdir(optarg)) {
+                /* failed to cd to directory */
+                print_usage(argv[0], "invalid output directory for mail");
+                return 63;
+            }
+            if (server_sf == STDOUT)
+                server_sf = BOTH;
+            else
+                server_sf = MAILBOX;
+            break;
+        default:
+            /* unknown flag */
+            print_usage(argv[0], "unknown flag");
+            return -1;
         }
-        if (port == 0) port = 25; /* it was server + string */
-    } else if (argc == 4) {
-        if (parse_arg(argv[2]) != 0) { /* parse string */
-            print_usage(argv[0]);
-            return 64;
-        }
-        port = parse_arg(argv[3]);
-        if (port < 0 || port > 65535) { /* parse port */
-            print_usage(argv[0]);
-            return 64;
-        }
-    } else { /* some error... */
-        print_usage(argv[0]);
-        return 64;
     }
 
+    server_hostname = arr2str(&argv[optind], argc-optind);
+
     fprintf(stderr, INFO"%s starting!\n", MAILVER);
-    fprintf(stderr, INFO"Accepting mails to `%s`; ", argv[1]);
-    fprintf(stderr, "Listening on port %d; ", port);
-    fprintf(stderr, "Output format `%s`\n", sf_strs[server_sf-1]);
+    fprintf(stderr, INFO"Accepting mails to `%s`\n", server_hostname);
+    fprintf(stderr, INFO"Listening on port %d\n", port);
+    fprintf(stderr, INFO"Output format: %s\n", sf_strs[server_sf]);
 
     /* initial socket setup and stuff */
     server_initsocket(&fd_s);
     if (fd_s < 0) return -1;
-
-    server_hostname = argv[1];
-    server_hostname_len = strlen(server_hostname);
 
     if (smtp_gengreeting() < 0) {
         fprintf(stderr, ERR"System appears to be Out of Memory!\n");
