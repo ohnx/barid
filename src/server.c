@@ -180,7 +180,7 @@ void *server_child(void *arg) {
 disconnect:
     if (mail != NULL) {
         /* make sure the email was filled */
-        if (mail->from_c > 0) {
+        if (mail->data_c > 0) {
             (mail->extra)->origin_ip = &addr;
             mail_serialize(mail, server_sf);
         }
