@@ -58,7 +58,7 @@ struct mail {
 #define MAIL_MAX_DATA_C         16777216
 
 /* version string */
-#define MAILVER "SMTP mail v0.1.1g"
+#define MAILVER "SMTP mail v0.2.1b"
 
 /* buffer for a single line of input from a server */
 #define LARGEBUF                4096

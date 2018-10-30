@@ -96,7 +96,8 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
     if (!strncmp(line, "NOOP", 4)) { /* do nothing */
         return 250;
     } else if (!strncmp(line, "RSET", 4)) { /* reset connection */
-        *stage = HELO;
+        mail_reset(mail);
+        *stage = MAIL;
         return 250;
     } else if (!strncmp(line, "QUIT", 4)) { /* bye! */
         return 221;

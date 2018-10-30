@@ -40,6 +40,7 @@ enum mail_sf {
 
 struct mail *mail_new_internal(int hasExtra);
 #define mail_new()  mail_new_internal(1)
+int mail_reset(struct mail *email);
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_appenddata(struct mail *email, const char *data);

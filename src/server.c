@@ -150,16 +150,10 @@ void *server_child(void *arg) {
                     else smtp_handlecode(422, fd);
 
                     /* end of data! send OK message and set status to MAIL */
-                    
                     stage = MAIL;
 
                     /* reset the mail */
-                    mail_destroy(mail);
-                    mail = mail_new();
-                    if (mail) {
-                        mail_setattr(mail, FROMS, srv);
-                        (mail->extra)->origin_ip = &addr;
-                    }
+                    mail_reset(mail);
                 } else {
                     /* change \0\n to \n\0 */
                     *eol = '\n';

@@ -36,6 +36,20 @@ struct mail *mail_new_internal(int hasExtra) {
     return email;
 }
 
+int mail_reset(struct mail *email) {
+    /* clear from */
+    free(email->from_v);
+    email->from_v = NULL;
+    email->from_c = 0;
+    /* clear to */
+    email->to_v[0] = '\0';
+    email->to_c = 0;
+    /* clear data */
+    email->data_v[0] = '\0';
+    email->data_c = 0;
+    return 0;
+}
+
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
     int data_len, i, t;
     data_len = strlen(data) + 1; /* include null */
