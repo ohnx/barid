@@ -12,9 +12,9 @@
 #define RESET ""
 #endif
 
-#define INFO "["KBLU"!"RESET"] "
-#define WARN "["KYEL"!"RESET"] "
-#define ERR "["KRED"!"RESET"] "
+#define INFO "["KBLU"!"RESET"]"
+#define WARN "["KYEL"!"RESET"]"
+#define ERR "["KRED"!"RESET"]"
 
 /* server stage */
 enum server_stage {
@@ -50,6 +50,12 @@ struct mail {
     struct mail_internal_info *extra;
 };
 
+struct common_data {
+    char *server_greeting;
+    int server_greeting_len;
+    char *server_hostname;
+};
+
 /* max length of an email's recipients (in bytes)
  * 512 recipients @ 256 bytes per email = 131072 B (128 KiB) */
 #define MAIL_MAX_TO_C           131072
@@ -58,7 +64,7 @@ struct mail {
 #define MAIL_MAX_DATA_C         16777216
 
 /* version string */
-#define MAILVER "SMTP mail v0.2.1b"
+#define MAILVER "SMTP mail v0.2.2g"
 
 /* buffer for a single line of input from a server */
 #define LARGEBUF                4096

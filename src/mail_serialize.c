@@ -2,6 +2,28 @@
 
 int mail_serialize(struct mail *email, enum mail_sf format) {
     int r;
+    time_t t;
+    struct tm *tm;
+    char ip[46], hst[NI_MAXHOST];
+    struct sockaddr_storage *a;
+
+    /* ip info */
+    a = (email->extra)->origin_ip;
+    if (a->ss_family == AF_INET6)
+        inet_ntop(a->ss_family, &((struct sockaddr_in6 *)a)->sin6_addr, ip, 46);
+    else
+        inet_ntop(a->ss_family, &((struct sockaddr_in *)a)->sin_addr, ip, 46);
+    getnameinfo((struct sockaddr *)a, sizeof(*a), hst, sizeof(hst), NULL, 0, 0);
+
+    /* time info */
+    time(&t);
+    tm = localtime(&t);
+
+    /* Display log */
+    fprintf(stderr, INFO"[%04d-%02d-%02d %02d:%02d:%02d] ", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+    fprintf(stderr, "Mail from %s (%s)\n", strncmp(hst, "::ffff:", 7)?hst:&hst[7], strncmp(ip, "::ffff:", 7)?ip:&ip[7]);
+
+    /**/
     switch (format) {
     case MAILBOX:
     case BOTH:
@@ -16,30 +38,15 @@ int mail_serialize(struct mail *email, enum mail_sf format) {
 
 int mail_serialize_stdout(struct mail *email) {
     int i = 0;
-    char ip[46];
-    char hst[NI_MAXHOST];
-    struct sockaddr_storage *a;
-
-    /* ip info */
-    a = (email->extra)->origin_ip;
-    if (a->ss_family == AF_INET6)
-        inet_ntop(a->ss_family, &((struct sockaddr_in6 *)a)->sin6_addr, ip, 46);
-    else
-        inet_ntop(a->ss_family, &((struct sockaddr_in *)a)->sin_addr, ip, 46);
-    getnameinfo((struct sockaddr *)a, sizeof(*a), hst, sizeof(hst), NULL, 0, 0);
-
-    /* print out info */
-    printf("----------------------\n");
-    printf("new email from `%s` ", strncmp(hst, "::ffff:", 7)?hst:&hst[7]);
-    printf("(%s)\n", strncmp(ip, "::ffff:", 7)?ip:&ip[7]);
-    printf("reported sender server: `%s`\n", email->froms_v);
-    printf("reported sender email: `%s`\n", email->from_v);
-    printf("reported recipients:\n");
+    printf("From: `%s` via `%s`\n", email->from_v, email->froms_v);
+    printf("To: ");
     for (i = 0; i < email->to_c; i++) {
-        printf("\t`%s`\n", email->to_v + i);
+        printf("`%s`", email->to_v + i);
         i += strlen(email->to_v + i);
+        if (i <= email->to_c) printf(",");
     }
-    printf("given data: ```\n%s```\n", email->data_v);
+    printf("\n");
+    printf("Body: ```\n%s```\n", email->data_v);
     return 0;
 }
 

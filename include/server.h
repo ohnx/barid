@@ -12,10 +12,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include "common.h"
 #include "mail.h"
 #include "smtp.h"
+#include "ssl.h"
 
 extern char *server_greeting;
 extern int server_greeting_len;

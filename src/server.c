@@ -50,8 +50,9 @@ void *server_child(void *arg) {
     char buf_in[LARGEBUF], *srv;
     struct timeval timeout;
     enum server_stage stage;
-    int rcn, fd, deliver_status;
+    int rcn, deliver_status;
     unsigned int buf_in_off, xaddr;
+    struct connection *conn;
     struct mail *mail;
     struct sockaddr_storage addr;
 
@@ -64,15 +65,15 @@ void *server_child(void *arg) {
     buf_in_off = 0;
 
     /* extract the required data from args */
-    fd = *((int *)arg);
+    conn = (struct connection *)arg;
 
     /* connection info */
     xaddr = sizeof(addr);
-    if (getpeername(fd, (struct sockaddr *)&addr, &xaddr) < 0) goto disconnect;
+    if (getpeername(conn->fd, (struct sockaddr *)&addr, &xaddr) < 0) goto disconnect;
     if (mail) (mail->extra)->origin_ip = &addr;
 
     /* initial greeting */
-    if (smtp_handlecode(220, fd)) goto disconnect;
+    if (smtp_handlecode(220, conn)) goto disconnect;
 
     /* loops! yay! */
     while (1) {
@@ -82,18 +83,18 @@ void *server_child(void *arg) {
 
         /* we use select() here to have a timeout */
         FD_ZERO(&sockset);
-        FD_SET(fd, &sockset);
+        FD_SET(conn->fd, &sockset);
 
-        select(fd + 1, &sockset, NULL, NULL, &timeout);
+        select(conn->fd + 1, &sockset, NULL, NULL, &timeout);
 
         /* check for timeout */
-        if (!FD_ISSET(fd, &sockset)) {
+        if (!FD_ISSET(conn->fd, &sockset)) {
             /* socket time out, close it */
             break;
         }
 
         /* receive data */
-        rcn = recv(fd, buf_in + buf_in_off, LARGEBUF - buf_in_off - 1, 0);
+        rcn = ssl_conn_rx(conn, buf_in + buf_in_off, LARGEBUF - buf_in_off - 1);
 
         /* check for errors */
         if (rcn == 0) { /* Remote host closed connection */
@@ -116,7 +117,7 @@ void *server_child(void *arg) {
         if (eol == NULL) {
             /* overflow; line too long */
             if (buf_in_off + rcn >= LARGEBUF - 1) {
-                smtp_handlecode(500, fd);
+                smtp_handlecode(500, conn);
 
                 /* reset the count and keep going */
                 buf_in_off = 0;
@@ -135,7 +136,7 @@ void *server_child(void *arg) {
             /* are we processing verbs or what? */
             if (stage != END_DATA) { /* processing a verb */
                 /* smtp_handlecode returns 1 when server should quit */
-                if (smtp_handlecode(smtp_parsel(lns, &stage, mail), fd))
+                if (smtp_handlecode(smtp_parsel(lns, &stage, mail), conn))
                         goto disconnect;
                 if (stage == MAIL && srv == NULL)
                     srv = _m_strdup(mail->froms_v);
@@ -146,8 +147,8 @@ void *server_child(void *arg) {
                     deliver_status = mail_serialize(mail, server_sf);
 
                     /* end of data! send message and set status to MAIL */
-                    if (!deliver_status) smtp_handlecode(250, fd);
-                    else smtp_handlecode(422, fd);
+                    if (!deliver_status) smtp_handlecode(250, conn);
+                    else smtp_handlecode(422, conn);
 
                     /* end of data! send OK message and set status to MAIL */
                     stage = MAIL;
@@ -161,9 +162,9 @@ void *server_child(void *arg) {
                     /* append data and check for errors */
                     rcn = mail_appenddata(mail, lns);
                     if (rcn == MAIL_ERROR_DATAMAX) {
-                        smtp_handlecode(522, fd);
+                        smtp_handlecode(522, conn);
                     } else if (rcn == MAIL_ERROR_OOM) {
-                        smtp_handlecode(451, fd);
+                        smtp_handlecode(451, conn);
                     }
                 }
             }
@@ -190,7 +191,7 @@ disconnect:
     }
 
     /* close socket */
-    close(fd);
+    close(conn->fd);
     free(arg);
     free(srv);
     pthread_exit(NULL);
@@ -251,7 +252,8 @@ int main(int argc, char **argv) {
     /* vars */
     pthread_attr_t attr;
     pthread_t thread;
-    int fd_s, *fd_c, port = 25, opt;
+    struct connection *fd_c;
+    int fd_s, port = 25, opt;
 
     server_sf = NONE;
 
@@ -294,33 +296,36 @@ int main(int argc, char **argv) {
 
     server_hostname = arr2str(&argv[optind], argc-optind);
 
-    fprintf(stderr, INFO"%s starting!\n", MAILVER);
-    fprintf(stderr, INFO"Accepting mails to `%s`\n", server_hostname);
-    fprintf(stderr, INFO"Listening on port %d\n", port);
-    fprintf(stderr, INFO"Output format: %s\n", sf_strs[server_sf]);
+    fprintf(stderr, INFO" %s starting!\n", MAILVER);
+    fprintf(stderr, INFO" Accepting mails to `%s`\n", server_hostname);
+    fprintf(stderr, INFO" Listening on port %d\n", port);
+    fprintf(stderr, INFO" Output format: %s\n", sf_strs[server_sf]);
 
     /* initial socket setup and stuff */
     server_initsocket(&fd_s);
     if (fd_s < 0) return -1;
 
     if (smtp_gengreeting() < 0) {
-        fprintf(stderr, ERR"System appears to be Out of Memory!\n");
+        fprintf(stderr, ERR" System appears to be Out of Memory!\n");
         return -17;
     }
 
+    /* initialize SSL */
+    ssl_init();
+
     /* bind port */
     if (server_bindport(fd_s, port) < 0) {
-        fprintf(stderr, ERR"Could not bind to the port %d!\n", port);
+        fprintf(stderr, ERR" Could not bind to the port %d!\n", port);
         return -2;
     }
 
     /* pthread config */
     if (pthread_attr_init(&attr) != 0) {
-        fprintf(stderr, ERR"Failed to configure threads!\n");
+        fprintf(stderr, ERR" Failed to configure threads!\n");
         return -3;
     }
     if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
-        fprintf(stderr, ERR"Failed to configure threads!\n");
+        fprintf(stderr, ERR" Failed to configure threads!\n");
         return -4;
     }
 
@@ -329,11 +334,11 @@ int main(int argc, char **argv) {
         int fd_ctmp;
         /* accept() it */
         if ((fd_ctmp = accept(fd_s, NULL, NULL)) < 0) {
-            fprintf(stderr, ERR"Failed to accept() a connection!\n");
+            fprintf(stderr, ERR" Failed to accept() a connection!\n");
             break;
         } else {
             /* allocate some memory for a new client session */
-            fd_c = malloc(sizeof(int));
+            fd_c = malloc(sizeof(struct connection));
 
             /* Make sure it allocated correctly */
             if (fd_c == NULL) {
@@ -343,7 +348,8 @@ int main(int argc, char **argv) {
             }
 
             /* copy over value */
-            *fd_c = fd_ctmp;
+            fd_c->fd = fd_ctmp;
+            fd_c->ssl = 0;
 
             /* accepted a new connection, create a thread! */
             pthread_create(&thread, &attr, &server_child, fd_c);

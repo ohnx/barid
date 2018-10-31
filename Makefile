@@ -2,7 +2,7 @@ INCLUDES=-Iinclude/
 LIBS=-lpthread -Ldist/ -lmbedtls
 CFLAGS=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic -g -O0
 
-OBJ=objs/smtp.o objs/mail.o objs/server.o objs/mail_serialize.o
+OBJ=objs/smtp.o objs/mail.o objs/server.o objs/mail_serialize.o objs/ssl.o
 OUTPUT=mail
 
 default: $(OUTPUT)
@@ -13,6 +13,7 @@ default: $(OUTPUT)
 
 dist/libmbedtls.a:
 	-@git submodule update --init --recursive
+	cd dist/mbedtls; scripts/config.pl set MBEDTLS_THREADING_C; scripts/config.pl set MBEDTLS_THREADING_PTHREAD;
 	$(MAKE) no_test -C dist/mbedtls
 	cp dist/mbedtls/library/*.a dist/
 

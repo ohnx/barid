@@ -1,3 +1,4 @@
+/* this file deals with all of the SMTP protocol stuff */
 #include "smtp.h"
 
 int smtp_gengreeting() {
@@ -38,41 +39,41 @@ int smtp_gengreeting() {
     return 0;
 }
 
-int smtp_handlecode(int code, int fd) {
+int smtp_handlecode(int code, struct connection *conn) {
     /* the ternary here is to detect if send() had any errors */
     switch (code) {
     /* 200-family */
     case 220:
-        return send(fd, server_greeting, server_greeting_len, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, server_greeting, server_greeting_len) > 0 ? 0 : 1;
     case 221:
-        return send(fd, "221 BYE\r\n", 9, 0) + 2; /* always close */
+        return ssl_conn_tx(conn, "221 BYE\r\n", 9) + 2; /* always close */
     case 250:
-        return send(fd, "250 OK\r\n", 8, 0) > 0 ? 0 : 1; /* close on error */
+        return ssl_conn_tx(conn, "250 OK\r\n", 8) > 0 ? 0 : 1; /* close on error */
     /* 300-family */
     case 354:
-        return send(fd, "354 SEND DATA PLZ!\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "354 SEND DATA PLZ!\r\n", 20) > 0 ? 0 : 1;
     /* 400-family server-caused error */
     case 422:
-        return send(fd, "422 MAILBOX FULL!!\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "422 MAILBOX FULL!!\r\n", 20) > 0 ? 0 : 1;
     case 450:
-        return send(fd, "450 BAD MAILBOX :(\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "450 BAD MAILBOX :(\r\n", 20) > 0 ? 0 : 1;
     case 451:
-        return send(fd, "451 INTERNAL ERROR\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "451 INTERNAL ERROR\r\n", 20) > 0 ? 0 : 1;
     case 452:
-        return send(fd, "452 TOO MANY RCPTS\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "452 TOO MANY RCPTS\r\n", 20) > 0 ? 0 : 1;
     /* 500-family client-caused error */
     case 500:
-        return send(fd, "500 LINE TOO LONG!\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "500 LINE TOO LONG!\r\n", 20) > 0 ? 0 : 1;
     case 501:
-        return send(fd, "501 ARGUMENT ERROR\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "501 ARGUMENT ERROR\r\n", 20) > 0 ? 0 : 1;
     case 502:
-        return send(fd, "502 NOTIMPLEMENTED\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "502 NOTIMPLEMENTED\r\n", 20) > 0 ? 0 : 1;
     case 503:
-        return send(fd, "503 WRONG SEQUENCE\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "503 WRONG SEQUENCE\r\n", 20) > 0 ? 0 : 1;
     case 522:
-        return send(fd, "522 TOO MUCH DATA!\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "522 TOO MUCH DATA!\r\n", 20) > 0 ? 0 : 1;
     case 550:
-        return send(fd, "550 USER NOT LOCAL\r\n", 20, 0) > 0 ? 0 : 1;
+        return ssl_conn_tx(conn, "550 USER NOT LOCAL\r\n", 20) > 0 ? 0 : 1;
     /* Unknown??!? */
     default:
         return 0;

@@ -4,6 +4,7 @@
 #include "server.h"
 #include "common.h"
 #include <stdio.h>
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
