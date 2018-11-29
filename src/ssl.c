@@ -27,6 +27,8 @@ int ssl_conn_start(struct connection *conn) {
     int ret;
     struct ssl_ctx *ctx = (struct ssl_ctx *)conn->ssl;
     if (!ctx) return -1;
+    /* SSL already started */
+    if (ctx->flags&0x1) return -2;
 
     /* initialize ssl context */
     mbedtls_ssl_init(&(ctx->ssl));

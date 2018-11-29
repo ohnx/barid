@@ -53,7 +53,9 @@ int smtp_handlecode(int code, struct connection *conn) {
     case 250:
         return ssl_conn_tx(conn, "250 OK\r\n", 8) > 0 ? 0 : 1; /* close on error */
     case 8250: /* returned by EHLO 250 OK */
-        return ssl_conn_tx(conn, "250 STARTTLS\r\n", 14) > 0 ? 0 : 1;
+        ssl_conn_tx(conn, "250-barid mail server\r\n", 23);
+        if (enable_ssl) ssl_conn_tx(conn, "250-STARTTLS\r\n", 14);
+        return ssl_conn_tx(conn, "250 RSET\r\n", 10) > 0 ? 0 : 1;
     /* 300-family */
     case 354:
         return ssl_conn_tx(conn, "354 SEND DATA PLZ!\r\n", 20) > 0 ? 0 : 1;
