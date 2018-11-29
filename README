@@ -5,21 +5,28 @@
                       /_.___/\__,_/_/  /_/\__,_/   
                                                    
 
-simple mail server written in C for POSIX. get yourself some mail!
+barid is a simple mail server written in C for POSIX. barid is *not* a relaying
+server; the intention is for barid to be run on a computer and receive mail
+from other Mail Transfer Agents (MTA's).
 
-output is stdout (mentions IP and stuff, too) or files in a directory (mbox
-format). for help on how to specify output type, server name, and listening
-port, please run the command.
+barid is multi-threaded, can receive secured email using STARTTLS, and fully
+supports IPv6. barid can output to standard output or into an Mbox format.
 
-((probably) poorly) multi-threaded!
+Currently, there are no anti-spam features.
 
---------------------------------------------------------------------------------
 
-__      ___   ___ _  _ ___ _  _  ___ 
-\ \    / /_\ | _ \ \| |_ _| \| |/ __|
- \ \/\/ / _ \|   / .` || || .` | (_ |
-  \_/\_/_/ \_\_|_\_|\_|___|_|\_|\___|
-                                     
 
-i'm not very good at security so please don't expect this server to be very
-secure. please exercise caution and make good choices!
+Usage: ./barid [-p port] [-s] [-m mbox directory] [-k /path/to/key] [-c /path/to/cert] <host>
+        -p      the port to listen on (defaults to 25)
+        -s      output all mails to STDOUT
+        -m      output all mails, in MBOX format, to mbox directory
+        -k      path to server private key
+        -c      path to server certificate
+
+        host:   server hostname or IP (e.g., `example.com` or `127.0.0.1`)
+                Mails that are not at the hostnames will be rejected.
+                To allow mails to multiple servers, simply specify more server hosts
+                To allow mails to any server, do not specify a host.
+                First hostname given will be used to reply, unless none is given (defaults to example.com).
+
+        Note: if key and certificate are not both given, the server will not support SSL.

@@ -65,7 +65,7 @@ struct common_data {
 #define MAIL_MAX_DATA_C         16777216
 
 /* version string */
-#define MAILVER "SMTP mail v0.2.2g"
+#define MAILVER "barid v0.3.1j"
 
 /* buffer for a single line of input from a server */
 #define LARGEBUF                4096

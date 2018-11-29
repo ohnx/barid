@@ -204,7 +204,7 @@ void handle_sigint(int sig) {
 }
 
 void print_usage(const char *bin, const char *msg) {
-    fprintf(stderr, "mail version `"MAILVER"`\n");
+    fprintf(stderr, "barid version `"MAILVER"`\n");
     if (msg) fprintf(stderr, "Error: %s\n", msg);
     fprintf(stderr, "Usage: %s [-p port] [-s] [-m mbox directory] [-k /path/to/key] [-c /path/to/cert] <host>\n", bin);
     fprintf(stderr, "\t-p\tthe port to listen on (defaults to 25)\n");
