@@ -44,7 +44,7 @@ int smtp_handlecode(int code, struct connection *conn) {
     switch (code) {
     /* See if STARTTLS is going to happen */
     case 8220:
-        if (!conn->ssl) {
+        if (conn->ssl) {
             ssl_conn_tx(conn, "220 LET'S STARTTLS\r\n", 20);
             return ssl_conn_start(conn);
         } else {

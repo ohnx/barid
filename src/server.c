@@ -4,6 +4,7 @@ char *server_greeting;
 int server_greeting_len;
 char *server_hostname;
 enum mail_sf server_sf;
+volatile sig_atomic_t prgrm_r = 1;
 
 static char *_m_strdup(const char *x) {
     int l = strlen(x) + 1;
@@ -197,6 +198,10 @@ disconnect:
     pthread_exit(NULL);
 }
 
+void handle_sigint(int sig) {
+  prgrm_r = 0;
+}
+
 void print_usage(const char *bin, const char *msg) {
     fprintf(stderr, "mail version `"MAILVER"`\n");
     if (msg) fprintf(stderr, "Error: %s\n", msg);
@@ -259,8 +264,19 @@ int main(int argc, char **argv) {
     struct connection *fd_c;
     int fd_s, port = 25, opt, enable_ssl = 0;
     const char *ssl_key = NULL, *ssl_cert = NULL;
+    struct sigaction act;
 
+    /* initial setups */
     server_sf = NONE;
+
+    /* stuff */
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = SA_NODEFER;
+    act.sa_handler = handle_sigint;
+    sigaction(SIGTERM, &act, NULL);
+    sigaction(SIGHUP, &act, NULL);
+    sigaction(SIGINT, &act, NULL);
 
     /* parse arguments */
     while ((opt = getopt(argc, argv, "p:sm:k:c:")) != -1) {
@@ -366,7 +382,7 @@ int main(int argc, char **argv) {
     }
 
     /* loop forever! */
-    while (1) {
+    while (prgrm_r) {
         int fd_ctmp;
         /* accept() it */
         if ((fd_ctmp = accept(fd_s, NULL, NULL)) < 0) {
@@ -394,5 +410,11 @@ int main(int argc, char **argv) {
         }
     }
 
-    return -1;
+    /* cleanup */
+    ssl_global_deinit();
+    free(server_hostname);
+    free(server_greeting);
+    free(fd_c);
+
+    return 0;
 }

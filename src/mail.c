@@ -61,6 +61,7 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
         if (data_len == 0) return MAIL_ERROR_PARSE;
 
         /* copy the data */
+        if (email->froms_v) free(email->froms_v);
         email->froms_c = data_len;
         email->froms_v = malloc(data_len);
 
