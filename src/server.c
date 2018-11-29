@@ -414,7 +414,6 @@ int main(int argc, char **argv) {
     ssl_global_deinit();
     free(server_hostname);
     free(server_greeting);
-    free(fd_c);
 
     return 0;
 }

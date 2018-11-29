@@ -23,7 +23,7 @@ int mail_serialize(struct mail *email, enum mail_sf format) {
     fprintf(stderr, INFO"[%04d-%02d-%02d %02d:%02d:%02d] ", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
     fprintf(stderr, "Mail from %s (%s)\n", strncmp(hst, "::ffff:", 7)?hst:&hst[7], strncmp(ip, "::ffff:", 7)?ip:&ip[7]);
 
-    /**/
+    /* check what output format wanted */
     switch (format) {
     case MAILBOX:
     case BOTH:
