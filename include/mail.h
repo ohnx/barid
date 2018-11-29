@@ -27,7 +27,8 @@
 enum mail_attr {
     FROMS,
     FROM,
-    TO
+    TO,
+    SSL_USED
 };
 
 /* serialize output format */

@@ -42,18 +42,12 @@ int smtp_gengreeting() {
 int smtp_handlecode(int code, struct connection *conn) {
     /* the ternary here is to detect if send() had any errors */
     switch (code) {
-    /* See if STARTTLS is going to happen */
-    case 8220:
-        if (conn->ssl) {
-            ssl_conn_tx(conn, "220 LET'S STARTTLS\r\n", 20);
-            return ssl_conn_start(conn);
-        } else {
-            /* SSL not supported */
-            return ssl_conn_tx(conn, "502 NOTIMPLEMENTED\r\n", 20) > 0 ? 0 : 1;
-        }
     /* 200-family */
     case 220:
         return ssl_conn_tx(conn, server_greeting, server_greeting_len) > 0 ? 0 : 1;
+    case 8220: /* STARTTLS is going to happen */
+        ssl_conn_tx(conn, "220 LET'S STARTTLS\r\n", 20);
+        return ssl_conn_start(conn);
     case 221:
         return ssl_conn_tx(conn, "221 BYE\r\n", 9) + 2; /* always close */
     case 250:
@@ -212,7 +206,11 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         return 354;
     } else if (!strncmp(line, "STARTTLS", 8)) {
         if (!(*stage == MAIL)) return 503;
+        if (!enable_ssl) return 502;
         *stage = HELO;
+        /* let the mail portion know that SSL was used */
+        mail_setattr(mail, SSL_USED, NULL);
+
         /* custom code */
         return 8220;
     } else {

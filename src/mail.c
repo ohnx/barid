@@ -52,7 +52,8 @@ int mail_reset(struct mail *email) {
 
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
     int data_len, i, t;
-    data_len = strlen(data) + 1; /* include null */
+    if (data)
+        data_len = strlen(data) + 1; /* include null */
     t = 0;
 
     switch(attr) {
@@ -99,6 +100,13 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
         email->from_v[data_len - 3] = 0;
 
         /* no error */
+        return MAIL_ERROR_NONE;
+    case SSL_USED:
+        /* make sure we're not trying to set SSL enabled on a readonly email */
+        if (email->extra == NULL) return MAIL_ERROR_PROGRAM;
+
+        (email->extra)->using_ssl = 1;
+
         return MAIL_ERROR_NONE;
     default:
         /* should be calling mail_addattr() */

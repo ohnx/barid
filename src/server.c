@@ -4,6 +4,7 @@ char *server_greeting;
 int server_greeting_len;
 char *server_hostname;
 enum mail_sf server_sf;
+int enable_ssl;
 volatile sig_atomic_t prgrm_r = 1;
 
 static char *_m_strdup(const char *x) {
@@ -144,7 +145,7 @@ void *server_child(void *arg) {
             } else { /* processing message data */
                 /* check for end of data */
                 if (!strcmp(lns, ".")) {
-                    /* print out this mail's info (aka `deliver` it) */
+                    /* `deliver` this mail */
                     deliver_status = mail_serialize(mail, server_sf);
 
                     /* end of data! send message and set status to MAIL */
@@ -262,14 +263,15 @@ int main(int argc, char **argv) {
     pthread_attr_t attr;
     pthread_t thread;
     struct connection *fd_c;
-    int fd_s, port = 25, opt, enable_ssl = 0;
+    int fd_s, port = 25, opt;
     const char *ssl_key = NULL, *ssl_cert = NULL;
     struct sigaction act;
 
     /* initial setups */
     server_sf = NONE;
+    enable_ssl = 0;
 
-    /* stuff */
+    /* handle interruptions */
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_flags = SA_NODEFER;
@@ -345,7 +347,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, INFO" %s starting!\n", MAILVER);
     fprintf(stderr, INFO" Accepting mails to `%s`\n", server_hostname);
     fprintf(stderr, INFO" Listening on port %d\n", port);
-    if (enable_ssl) fprintf(stderr, INFO" SSL via STARTTLS supported\n");
+    if (enable_ssl) fprintf(stderr, INFO" TLS via STARTTLS supported\n");
     fprintf(stderr, INFO" Output format: %s\n", sf_strs[server_sf]);
 
     /* initial socket setup and stuff */
