@@ -191,7 +191,7 @@ disconnect:
     }
 
     /* close socket */
-    close(conn->fd);
+    ssl_conn_close(conn);
     free(arg);
     free(srv);
     pthread_exit(NULL);
@@ -200,16 +200,20 @@ disconnect:
 void print_usage(const char *bin, const char *msg) {
     fprintf(stderr, "mail version `"MAILVER"`\n");
     if (msg) fprintf(stderr, "Error: %s\n", msg);
-    fprintf(stderr, "Usage: %s [-p port] [-s] [-m mbox directory] <host>\n", bin);
+    fprintf(stderr, "Usage: %s [-p port] [-s] [-m mbox directory] [-k /path/to/key] [-c /path/to/cert] <host>\n", bin);
     fprintf(stderr, "\t-p\tthe port to listen on (defaults to 25)\n");
     fprintf(stderr, "\t-s\toutput all mails to STDOUT\n");
     fprintf(stderr, "\t-m\toutput all mails, in MBOX format, to mbox directory\n");
+    fprintf(stderr, "\t-k\tpath to server private key\n");
+    fprintf(stderr, "\t-c\tpath to server certificate\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\thost:\tserver hostname or IP (e.g., `example.com` or `127.0.0.1`)\n");
     fprintf(stderr, "\t\tMails that are not at the hostnames will be rejected.\n");
     fprintf(stderr, "\t\tTo allow mails to multiple servers, simply specify more server hosts\n");
     fprintf(stderr, "\t\tTo allow mails to any server, do not specify a host.\n");
     fprintf(stderr, "\t\tFirst hostname given will be used to reply, unless none is given (defaults to example.com).\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\tNote: if key and certificate are not both given, the server will not support SSL.\n");
 }
 
 char *arr2str(char *const *astr, size_t alen) {
@@ -253,19 +257,20 @@ int main(int argc, char **argv) {
     pthread_attr_t attr;
     pthread_t thread;
     struct connection *fd_c;
-    int fd_s, port = 25, opt;
+    int fd_s, port = 25, opt, enable_ssl = 0;
+    const char *ssl_key = NULL, *ssl_cert = NULL;
 
     server_sf = NONE;
 
     /* parse arguments */
-    while ((opt = getopt(argc, argv, "p:sm:")) != -1) {
+    while ((opt = getopt(argc, argv, "p:sm:k:c:")) != -1) {
         switch (opt) {
         case 'p':
             /* port */
             port = atoi(optarg);
             if (port < 0 || port > 65535) {
                 print_usage(argv[0], "invalid port specified");
-                return 64;
+                return 53;
             }
             break;
         case 's':
@@ -287,18 +292,44 @@ int main(int argc, char **argv) {
             else
                 server_sf = MAILBOX;
             break;
+        case 'k':
+            if (ssl_key) {
+                print_usage(argv[0], "only 1 private key allowed");
+                return 17;
+            }
+            ssl_key = optarg;
+            enable_ssl++;
+            break;
+        case 'c':
+            if (ssl_cert) {
+                print_usage(argv[0], "only 1 certificate allowed");
+                return 19;
+            }
+            ssl_cert = optarg;
+            enable_ssl++;
+            break;
         default:
             /* unknown flag */
             print_usage(argv[0], "unknown flag");
-            return -1;
+            return 34;
         }
     }
 
+    /* cry about bad SSL */
+    if (enable_ssl == 1) {
+        print_usage(argv[0], "missing required parameter for SSL support");
+        return 121;
+    } else if (enable_ssl) {
+        enable_ssl = 1;
+    }
+
+    /* build correct hostnames string */
     server_hostname = arr2str(&argv[optind], argc-optind);
 
     fprintf(stderr, INFO" %s starting!\n", MAILVER);
     fprintf(stderr, INFO" Accepting mails to `%s`\n", server_hostname);
     fprintf(stderr, INFO" Listening on port %d\n", port);
+    if (enable_ssl) fprintf(stderr, INFO" SSL via STARTTLS supported\n");
     fprintf(stderr, INFO" Output format: %s\n", sf_strs[server_sf]);
 
     /* initial socket setup and stuff */
@@ -311,7 +342,12 @@ int main(int argc, char **argv) {
     }
 
     /* initialize SSL */
-    ssl_init();
+    if (enable_ssl) {
+        if (ssl_global_init(ssl_cert, ssl_key)) {
+            fprintf(stderr, ERR" Failed to configure SSL!\n");
+            return -12;
+        }
+    }
 
     /* bind port */
     if (server_bindport(fd_s, port) < 0) {
@@ -338,7 +374,7 @@ int main(int argc, char **argv) {
             break;
         } else {
             /* allocate some memory for a new client session */
-            fd_c = malloc(sizeof(struct connection));
+            fd_c = malloc(sizeof(struct connection)+(enable_ssl?sizeof(struct ssl_ctx):0));
 
             /* Make sure it allocated correctly */
             if (fd_c == NULL) {
@@ -349,7 +385,9 @@ int main(int argc, char **argv) {
 
             /* copy over value */
             fd_c->fd = fd_ctmp;
-            fd_c->ssl = 0;
+            /* zero value before using it */
+            if (enable_ssl) memset(fd_c + 1, 0, sizeof(struct ssl_ctx));
+            fd_c->ssl = enable_ssl?(struct ssl_ctx *)(fd_c + 1):NULL;
 
             /* accepted a new connection, create a thread! */
             pthread_create(&thread, &attr, &server_child, fd_c);

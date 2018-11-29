@@ -42,6 +42,15 @@ int smtp_gengreeting() {
 int smtp_handlecode(int code, struct connection *conn) {
     /* the ternary here is to detect if send() had any errors */
     switch (code) {
+    /* See if STARTTLS is going to happen */
+    case 8220:
+        if (!conn->ssl) {
+            ssl_conn_tx(conn, "220 LET'S STARTTLS\r\n", 20);
+            return ssl_conn_start(conn);
+        } else {
+            /* SSL not supported */
+            return ssl_conn_tx(conn, "502 NOTIMPLEMENTED\r\n", 20) > 0 ? 0 : 1;
+        }
     /* 200-family */
     case 220:
         return ssl_conn_tx(conn, server_greeting, server_greeting_len) > 0 ? 0 : 1;
@@ -49,6 +58,8 @@ int smtp_handlecode(int code, struct connection *conn) {
         return ssl_conn_tx(conn, "221 BYE\r\n", 9) + 2; /* always close */
     case 250:
         return ssl_conn_tx(conn, "250 OK\r\n", 8) > 0 ? 0 : 1; /* close on error */
+    case 8250: /* returned by EHLO 250 OK */
+        return ssl_conn_tx(conn, "250 STARTTLS\r\n", 14) > 0 ? 0 : 1;
     /* 300-family */
     case 354:
         return ssl_conn_tx(conn, "354 SEND DATA PLZ!\r\n", 20) > 0 ? 0 : 1;
@@ -136,6 +147,9 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
 
         /* update stage */
         *stage = MAIL;
+
+        /* check request - EHLO will have more returns and we create a custom SMTP code for it */
+        if (*line == 'E') return 8250;
     } else if (!strncmp(line, "MAIL", 4)) { /* got mail from ... */
         /* ensure correct order */
         if (!(*stage == MAIL)) return 503;
@@ -196,6 +210,11 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
 
         /* send CONTINUE message */
         return 354;
+    } else if (!strncmp(line, "STARTTLS", 8)) {
+        if (!(*stage == MAIL)) return 503;
+        *stage = HELO;
+        /* custom code */
+        return 8220;
     } else {
         return 502;
     }

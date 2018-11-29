@@ -1,4 +1,5 @@
+certs/
 objs/
-mail
+barid
 *.so
 *.a
