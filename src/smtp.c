@@ -107,7 +107,10 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         return 250;
     } else if (!strncmp(line, "RSET", 4)) { /* reset connection */
         mail_reset(mail);
-        *stage = MAIL;
+        if (mail->froms_v)
+            *stage = MAIL;
+        else
+            *stage = HELO;
         return 250;
     } else if (!strncmp(line, "QUIT", 4)) { /* bye! */
         return 221;
