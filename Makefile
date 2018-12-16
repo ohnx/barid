@@ -1,6 +1,6 @@
 INCLUDES=-Iinclude/ -Idist/mbedtls/include
 LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509
-CFLAGS=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic -g -O0
+CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic -g -O0
 
 OBJ=objs/smtp.o objs/mail.o objs/server.o objs/mail_serialize.o objs/ssl.o
 OUTPUT=barid
@@ -34,6 +34,15 @@ debugnet: $(OUTPUT) debug/hook_net.so
 .PHONY: debug
 debug: $(OUTPUT)
 	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT) -p 2525 example.com example.org example.net -s
+
+.PHONY: fuzz
+fuzz: CC=afl-clang-fast
+fuzz: CFLAGS+=-D__FUZZ -Wno-gnu
+fuzz: $(OUTPUT)
+fuzz: clean
+	mkdir -p fuzz/in;
+	mkdir -p fuzz/out;
+	afl-fuzz -i fuzz/in -o fuzz/out ./barid
 
 .PHONY: clean
 clean:

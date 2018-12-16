@@ -1,0 +1,12 @@
+EHLOm>
+DATA
+.org>
+RCet
+MAIL FROM:<mason@example.org>
+RCexam
+RCPT st>
+RCPT TO:<mar@eample.com>
+DATA
+Th.
+.
+QUIT

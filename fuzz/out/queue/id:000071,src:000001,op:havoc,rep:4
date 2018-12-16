@@ -1,0 +1,9 @@
+EHLOst
+MAIL FROM:<
+rg>
+RCPT TO:<nina@localhost>
+RCPT TO:<marEHHO@example.com>
+DATA
+Th.
+.
+QUIT

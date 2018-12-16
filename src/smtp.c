@@ -45,9 +45,11 @@ int smtp_handlecode(int code, struct connection *conn) {
     /* 200-family */
     case 220:
         return ssl_conn_tx(conn, server_greeting, server_greeting_len) > 0 ? 0 : 1;
+#ifndef __FUZZ
     case 8220: /* STARTTLS is going to happen */
         ssl_conn_tx(conn, "220 LET'S STARTTLS\r\n", 20);
         return ssl_conn_start(conn);
+#endif
     case 221:
         return ssl_conn_tx(conn, "221 BYE\r\n", 9) + 2; /* always close */
     case 250:

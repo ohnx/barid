@@ -1,0 +1,10 @@
+EHLO
+EHLO
+EHLO
+RCPT st>
+RCPT
+:<
+EHLO
+EHLO>
+RCPT st>
+RCPTmasm>

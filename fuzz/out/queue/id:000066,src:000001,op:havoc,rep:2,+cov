@@ -1,0 +1,12 @@
+EHLO
+DATA
+Th.
+:<mason>
+RCPT st>
+RCPT TO
+Th.
+:<masm>
+DATA
+Th.
+.
+QUIT

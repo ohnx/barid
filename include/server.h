@@ -6,7 +6,9 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifndef __FUZZ
 #include <pthread.h>
+#endif
 #include <sys/select.h>
 #include <sys/types.h>
 #include <sys/socket.h>

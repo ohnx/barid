@@ -7,6 +7,7 @@ mbedtls_ssl_config ssl_conf;
 mbedtls_x509_crt srvcert;
 mbedtls_pk_context pkey;
 
+#ifndef __FUZZ
 /* called in a thread context */
 int ssl_conn_rx(struct connection *conn, char *buf, size_t bufsz) {
     if (!conn->ssl || !(conn->ssl->flags&0x1))
@@ -112,3 +113,12 @@ void ssl_global_deinit() {
     mbedtls_ctr_drbg_free(&ctr_drbg);
     mbedtls_entropy_free(&entropy);
 }
+#else
+int ssl_conn_rx(struct connection *conn, char *buf, size_t bufsz) {
+    return read(STDIN_FILENO, buf, bufsz);
+}
+
+int ssl_conn_tx(struct connection *conn, char *buf, size_t bufsz) {
+    return write(STDOUT_FILENO, buf, bufsz);
+}
+#endif

@@ -1,0 +1,24 @@
+EHLO localhost
+MAIL FROM:<mehdi@localhost>
+RCPT TO:<tony@example.net>
+RCPT TO:<james@localhost>
+RCPT TO:<brendan@example.org>
+RCPT TO:<sarah@example.com>
+DATA
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+Aliquam turpis est, porttitor ac facilisis et, aliquet vel metus.
+Duis condimentum ultricies lectus, ac pretium quam malesuada in.
+Sed fermentum enim a erat facilisis varius.
+Praesent vitae pretium tellus.
+Donec faucibus mauris justo, ac consectetur turpis ullamcorper et.
+Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos.
+Duis quis sem neque. Aliquam vitae pharetra nisl, sed ullamcorper lorem.
+In hac habitasse platea dictumst.
+Duis elementum justo turpis, ac varius nisi hendrerit at
+Mauris ac placerat dui, a consectetur magna.
+Praesent condimentum mi vitae diam tempus facilisis.
+Suspendisse vel convallis lorem.
+Suspendisse ultrices lorem eget quam egestas, at suscipit nisl viverra.
+Quisque mattis augue non fermentum lobortis.
+.
+QUIT

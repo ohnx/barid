@@ -1,0 +1,10 @@
+EHLO
+EHLO
+EHLO>
+RCPT st>
+RCPT TO
+Th.
+:<masm>
+DATA
+Th
+QUIT

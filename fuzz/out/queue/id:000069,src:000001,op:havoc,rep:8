@@ -1,0 +1,6 @@
+EHLOst
+MAIL ?ROM:<mason@example.org>
+RTO:<st>
+RCPT TO:<>
+DATA
+X

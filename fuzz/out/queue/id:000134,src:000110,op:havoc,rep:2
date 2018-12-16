@@ -1,0 +1,20 @@
+EHLOm>
+DATA
+.org>
+RSet
+MAIL HROM:<mao
+MAILC
+RCPT st>
+RCPTATA
+.org>
+RSet
+MAIL >
+DATA
+.org>
+RSet
+MAIL
+DATA
+Th.
+.
+MAIL
+QUIT

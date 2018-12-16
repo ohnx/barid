@@ -1,0 +1,26 @@
+EHLO localhost
+MAIL FROM:<donald@example.com>
+RCPT TO:<rajit@example.com>
+DATA
+MIME-Version: 1.0
+Subject: Test message
+From: Donald Duck <donald@example.com>
+Content-Type: text/html; charset=”UTF-8″
+Content-Transfer-Encoding: quoted-printable
+To: rajit@example.com
+
+<b>Cool email body</b>
+.
+MAIL FROM:<alex@example.com>
+RCPT TO:<kristi@example.com>
+DATA
+MIME-Version: 1.0
+Subject: Test message
+From: Donald Duck <alex@example.com>
+Content-Type: text/html; charset=”UTF-8″
+Content-Transfer-Encoding: quoted-printable
+To: kristi@example.com
+
+<b>Cool email body</b>
+.
+QUIT

@@ -1,0 +1,9 @@
+EHLO
+
+EHLO>
+RCPT st>
+RCPT TOm>
+DATA
+Th.
+.
+QUIT

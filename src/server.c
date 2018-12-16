@@ -29,6 +29,7 @@ void server_initsocket(int *fd) {
     }
 }
 
+#ifndef __FUZZ
 int server_bindport(int fd, int port) {
     struct sockaddr_in6 saddr;
     int res;
@@ -46,6 +47,11 @@ int server_bindport(int fd, int port) {
     res = listen(fd, 1024);
     return res;
 }
+#else
+int server_bindport(int fd, int port) {
+    return 0;
+}
+#endif
 
 void *server_child(void *arg) {
     /* vars */
@@ -69,10 +75,14 @@ void *server_child(void *arg) {
     /* extract the required data from args */
     conn = (struct connection *)arg;
 
+#ifndef __FUZZ
     /* connection info */
     xaddr = sizeof(addr);
     if (getpeername(conn->fd, (struct sockaddr *)&addr, &xaddr) < 0) goto disconnect;
     if (mail) (mail->extra)->origin_ip = &addr;
+#else
+    xaddr = 0;
+#endif
 
     /* initial greeting */
     if (smtp_handlecode(220, conn)) goto disconnect;
@@ -80,8 +90,9 @@ void *server_child(void *arg) {
     /* loops! yay! */
     while (1) {
         /* vars */
-        fd_set sockset;
         char *eol, *lns;
+#ifndef __FUZZ
+        fd_set sockset;
 
         /* we use select() here to have a timeout */
         FD_ZERO(&sockset);
@@ -94,6 +105,7 @@ void *server_child(void *arg) {
             /* socket time out, close it */
             break;
         }
+#endif
 
         /* receive data */
         rcn = ssl_conn_rx(conn, buf_in + buf_in_off, LARGEBUF - buf_in_off - 1);
@@ -192,16 +204,24 @@ disconnect:
         mail_destroy(mail);
     }
 
+#ifndef __FUZZ
     /* close socket */
     ssl_conn_close(conn);
     free(arg);
     free(srv);
     pthread_exit(NULL);
+#else
+    free(arg);
+    free(srv);
+    return NULL;
+#endif
 }
 
+#ifndef __FUZZ
 void handle_sigint(int sig) {
-  prgrm_r = 0;
+    prgrm_r = 0;
 }
+#endif
 
 void print_usage(const char *bin, const char *msg) {
     fprintf(stderr, "barid version `"MAILVER"`\n");
@@ -260,17 +280,20 @@ const char *sf_strs[6] = {"NONE", "STDOUT", "ERR", "BINARY", "MAILBOX", "BOTH"};
 
 int main(int argc, char **argv) {
     /* vars */
+#ifndef __FUZZ
     pthread_attr_t attr;
     pthread_t thread;
+    struct sigaction act;
+#endif
     struct connection *fd_c;
     int fd_s, port = 25, opt;
     const char *ssl_key = NULL, *ssl_cert = NULL;
-    struct sigaction act;
 
     /* initial setups */
     server_sf = NONE;
     enable_ssl = 0;
 
+#ifndef __FUZZ
     /* handle interruptions */
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
@@ -279,6 +302,7 @@ int main(int argc, char **argv) {
     sigaction(SIGTERM, &act, NULL);
     sigaction(SIGHUP, &act, NULL);
     sigaction(SIGINT, &act, NULL);
+#endif
 
     /* parse arguments */
     while ((opt = getopt(argc, argv, "p:sm:k:c:")) != -1) {
@@ -333,6 +357,8 @@ int main(int argc, char **argv) {
         }
     }
 
+
+#ifndef __FUZZ
     /* cry about bad SSL */
     if (enable_ssl == 1) {
         print_usage(argv[0], "missing required parameter for SSL support");
@@ -340,15 +366,22 @@ int main(int argc, char **argv) {
     } else if (enable_ssl) {
         enable_ssl = 1;
     }
+#else
+    if (enable_ssl) {
+        fprintf(stderr, WARN" SSL should be disabled for fuzzing.\n");
+    }
+#endif
 
     /* build correct hostnames string */
     server_hostname = arr2str(&argv[optind], argc-optind);
 
+#ifndef __FUZZ
     fprintf(stderr, INFO" %s starting!\n", MAILVER);
     fprintf(stderr, INFO" Accepting mails to `%s`\n", server_hostname);
     fprintf(stderr, INFO" Listening on port %d\n", port);
     if (enable_ssl) fprintf(stderr, INFO" TLS via STARTTLS supported\n");
     fprintf(stderr, INFO" Output format: %s\n", sf_strs[server_sf]);
+#endif
 
     /* initial socket setup and stuff */
     server_initsocket(&fd_s);
@@ -359,6 +392,7 @@ int main(int argc, char **argv) {
         return -17;
     }
 
+#ifndef __FUZZ
     /* initialize SSL */
     if (enable_ssl) {
         if (ssl_global_init(ssl_cert, ssl_key)) {
@@ -382,7 +416,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, ERR" Failed to configure threads!\n");
         return -4;
     }
+#endif
 
+#ifndef __FUZZ
     /* loop forever! */
     while (prgrm_r) {
         int fd_ctmp;
@@ -409,11 +445,28 @@ int main(int argc, char **argv) {
 
             /* accepted a new connection, create a thread! */
             pthread_create(&thread, &attr, &server_child, fd_c);
+            server_child(fd_c);
         }
     }
 
     /* cleanup */
     ssl_global_deinit();
+#else
+    while (__AFL_LOOP(1000)) {
+        fd_c = malloc(sizeof(struct connection));
+
+        /* Make sure it allocated correctly */
+        if (fd_c == NULL) continue;
+
+        /* copy over value */
+        fd_c->fd = STDIN_FILENO;
+        fd_c->ssl = NULL;
+
+        /* force stdin */
+        server_child(fd_c);
+    }
+#endif
+
     free(server_hostname);
     free(server_greeting);
 

@@ -1,0 +1,8 @@
+EHLO localhost
+MAIL FROM:<mason@example.org>
+RCPT TO:<nina@localhost>
+RCPT TO:<marques@example.com>
+DATA
+The body data does not matter here.
+.
+QUIT

@@ -1,5 +1,6 @@
 #include "mail.h"
 
+#ifndef __FUZZ
 int mail_serialize(struct mail *email, enum mail_sf format) {
     int r;
     time_t t;
@@ -41,6 +42,11 @@ int mail_serialize(struct mail *email, enum mail_sf format) {
         return r;
     }
 }
+#else
+int mail_serialize(struct mail *email, enum mail_sf format) {
+    return 0;
+}
+#endif
 
 int mail_serialize_stdout(struct mail *email) {
     int i = 0;
@@ -141,7 +147,7 @@ int mail_serialize_file(struct mail *email) {
         *at_loc = '@';
         i += strlen(email->to_v + i);
         continue;
-        
+
     error:
         /* failed to open file, return error */
         free(fo_o);

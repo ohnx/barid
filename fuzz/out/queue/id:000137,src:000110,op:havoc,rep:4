@@ -1,0 +1,18 @@
+EHLODATA
+.org>
+RSet
+MAIL HROM:<mason@org>
+RC
+RCt>
+RCPT T
+DATA
+.org>
+RSet
+MAIL HROM:<mO:<mar@eaorg>
+RSet
+MAIL HROM:<mason@pVe>
+DATA
+Th.
+.
+MAIL
+QUIT

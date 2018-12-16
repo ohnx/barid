@@ -1,0 +1,16 @@
+EHLO localhost
+MAIL FROM:<isaac@example.net>
+RCPT TO:<sue@example.org>
+RCPT TO:<sally@example.net>
+DATA
+Rewind 2018 was a very badly scripted and made video. Just go check Rewind 2013 or 2014 and you agree with me! 
+
+It would be pretty awesome if you support me at Patreon:  
+http://patreon.com/electroboom
+Don’t forget to check my other channel: http://www.youtube.com/ElectroBOOM
+
+Follow my ElectroBOOM side on Facebook: http://www.facebook.com/ElectroBOOM
+
+By: Mehdi Sadaghdar
+.
+QUIT

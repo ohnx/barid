@@ -1,0 +1,17 @@
+EHLOm>
+DATA
+.org>
+RSet
+MAIL HROM:<mason@pVe.org>
+RC
+RCPT st>
+RCPT T
+DATA
+.org>
+RSet
+MAIL HROM:<mO:<mar@eample.com>
+DATA
+Th.
+.
+MAIL
+QUIT

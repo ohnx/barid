@@ -1,0 +1,11 @@
+EHLOst
+MAIL FROM:<mason@example.org>
+RCPT
+
+RCPTst>
+RCPT
+
+<mam>
+RCPT
+Th
+QUIT

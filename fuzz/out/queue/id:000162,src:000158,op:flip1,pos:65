@@ -1,0 +1,10 @@
+EHLOst
+MAIL FROM:<mason@exaalhost>
+RCPT TO:<mag>
+RCPT TO:<ninaÀlLost>
+RCPT Tst>
+RCPT TO:<malLost>
+RCPT TO:<marqueom>
+DATA
+T.
+QUIT

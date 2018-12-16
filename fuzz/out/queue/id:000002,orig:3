@@ -1,0 +1,24 @@
+EHLOst
+MAIL FROM:<mehdi@localhost>
+RCPT TO:<tony@eet>
+RCPT TO:<james@t>
+RCPT TO:<bre@exa>
+RCPT TO:<h@exe.com>
+DATA
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+ facilisis et, aliquet vel metus.
+Duis condimentum ultricies lein.
+Sed fermentum enim a erat facilisis varius.
+Praesent vitae pretium tellus.
+Donec faucibusrpis ullamcorper et.
+Class apteceptos himenaeos.
+Duis quis semisl, sed ullamcorper lorem.
+In hac habitasse platea dictumst.
+varius nisi hendrerit at
+Maurismagna.
+Praesent condimentum mi vitae diam tempus facilisis.
+Suspendisse vel convallis lorem.
+iverra.
+Quisque mattis augue non fermentum lobortis.
+.
+QUIT
