@@ -14,7 +14,7 @@ default: $(OUTPUT)
 dist/libmbedtls.a:
 	-@git submodule update --init --recursive
 	cd dist/mbedtls; scripts/config.pl set MBEDTLS_THREADING_C; scripts/config.pl set MBEDTLS_THREADING_PTHREAD;
-	$(MAKE) no_test -C dist/mbedtls
+	$(MAKE) lib -C dist/mbedtls
 	cp dist/mbedtls/library/*.a dist/
 
 objs/%.o: src/%.c
@@ -41,3 +41,4 @@ clean:
 	-rm -f $(OUTPUT)
 	$(MAKE) clean -C debug/
 	$(MAKE) clean -C dist/mbedtls
+

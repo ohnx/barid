@@ -117,8 +117,17 @@ void *server_child(void *arg) {
         /* check for errors */
         if (rcn == 0) { /* Remote host closed connection */
 			break;
-		} else if (rcn == -1) { /* Error on socket */
-			break;
+		} else if (rcn < 0) { /* Error on socket */
+		    switch (rcn) {
+		    case MBEDTLS_ERR_SSL_WANT_READ:
+		    case MBEDTLS_ERR_SSL_WANT_WRITE:
+		    case MBEDTLS_ERR_SSL_ASYNC_IN_PROGRESS:
+		    case MBEDTLS_ERR_SSL_CRYPTO_IN_PROGRESS:
+		    case MBEDTLS_ERR_SSL_CLIENT_RECONNECT:
+		        continue;
+		    default:
+		        goto disconnect;
+		    }
 		}
 
         /* null-terminate data */
