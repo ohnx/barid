@@ -6,6 +6,7 @@ char *server_hostname;
 enum mail_sf server_sf;
 int enable_ssl;
 volatile sig_atomic_t prgrm_r = 1;
+pthread_key_t sigsegv_jmp_point;
 
 static char *_m_strdup(const char *x) {
     int l = strlen(x) + 1;
@@ -57,14 +58,28 @@ void *server_child(void *arg) {
     struct connection *conn;
     struct mail *mail;
     struct sockaddr_storage addr;
+    sigjmp_buf point;
 
     /* initial values */
     timeout.tv_sec = 300;
     timeout.tv_usec = 0;
-    mail = mail_new();
+    mail = NULL;
     stage = HELO;
     srv = NULL;
     buf_in_off = 0;
+    xaddr = 0;
+
+    /* catch error if setjmp() returns 1 */
+    if (setjmp(point) == 1) {
+        fprintf(stderr, WARN" Segmentation fault in thread\n");
+        goto disconnect;
+    }
+
+    /* catch errors in this thread */
+    pthread_setspecific(sigsegv_jmp_point, &point);
+
+    /* allocate space for mail storage */
+    mail = mail_new();
 
     /* extract the required data from args */
     conn = (struct connection *)arg;
@@ -73,6 +88,7 @@ void *server_child(void *arg) {
     xaddr = sizeof(addr);
     if (getpeername(conn->fd, (struct sockaddr *)&addr, &xaddr) < 0) goto disconnect;
     if (mail) (mail->extra)->origin_ip = &addr;
+    xaddr = 0;
 
     /* initial greeting */
     if (smtp_handlecode(220, conn)) goto disconnect;
@@ -180,7 +196,10 @@ void *server_child(void *arg) {
         memmove(buf_in, lns, LARGEBUF - (lns - buf_in));
         buf_in_off -= (lns - buf_in);
     }
+
 disconnect:
+    if (xaddr++) goto quit_final;
+
     if (mail != NULL) {
         /* make sure the email was filled */
         if (mail->data_c > 0) {
@@ -194,13 +213,20 @@ disconnect:
 
     /* close socket */
     ssl_conn_close(conn);
+
+quit_final:
     free(arg);
     free(srv);
     pthread_exit(NULL);
 }
 
-void handle_sigint(int sig) {
-  prgrm_r = 0;
+void handle_sig(int sig) {
+    if (sig == SIGSEGV) {
+        /* longjmp to the thread-specific point */
+        longjmp(*((sigjmp_buf *)pthread_getspecific(sigsegv_jmp_point)), 1);
+    } else {
+        prgrm_r = 0;
+    }
 }
 
 void print_usage(const char *bin, const char *msg) {
@@ -266,6 +292,7 @@ int main(int argc, char **argv) {
     int fd_s, port = 25, opt;
     const char *ssl_key = NULL, *ssl_cert = NULL;
     struct sigaction act;
+    sigjmp_buf point;
 
     /* initial setups */
     server_sf = NONE;
@@ -275,10 +302,11 @@ int main(int argc, char **argv) {
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_flags = SA_NODEFER;
-    act.sa_handler = handle_sigint;
+    act.sa_handler = handle_sig;
     sigaction(SIGTERM, &act, NULL);
     sigaction(SIGHUP, &act, NULL);
     sigaction(SIGINT, &act, NULL);
+    sigaction(SIGSEGV, &act, NULL);
 
     /* parse arguments */
     while ((opt = getopt(argc, argv, "p:sm:k:c:")) != -1) {
@@ -383,6 +411,16 @@ int main(int argc, char **argv) {
         return -4;
     }
 
+    /* catch error if setjmp() returns 1 */
+    if (setjmp(point) == 1) {
+        fprintf(stderr, ERR" Segmentation fault in main server\n");
+        goto cleanup;
+    }
+
+    /* catch errors in this thread */
+    pthread_key_create(&sigsegv_jmp_point, NULL);
+    pthread_setspecific(sigsegv_jmp_point, &point);
+
     /* loop forever! */
     while (prgrm_r) {
         int fd_ctmp;
@@ -412,8 +450,10 @@ int main(int argc, char **argv) {
         }
     }
 
+cleanup:
     /* cleanup */
     ssl_global_deinit();
+    pthread_key_delete(sigsegv_jmp_point);
     free(server_hostname);
     free(server_greeting);
 
