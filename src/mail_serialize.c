@@ -1,7 +1,7 @@
 #include "mail.h"
 
 int mail_serialize(struct mail *email, enum mail_sf format) {
-    int r;
+    int r = 0;
     time_t t;
     struct tm *tm;
     char ip[46], hst[NI_MAXHOST];
@@ -36,8 +36,9 @@ int mail_serialize(struct mail *email, enum mail_sf format) {
         r = mail_serialize_file(email);
         if (r) return r;
         if (format == MAILBOX) return r;
-    default:
+    case STDOUT:
         r = mail_serialize_stdout(email);
+    default:
         return r;
     }
 }

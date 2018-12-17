@@ -157,7 +157,9 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         if (line_len < 10) return 501;
 
         /* parse out sending server and check return status */
-        i = mail_setattr(mail, FROM, line + 10);
+        for (i = 10; i < line_len; i++)
+            if (line[i] != ' ') break; /* skip past whitespace */
+        i = mail_setattr(mail, FROM, line + i);
         if (i == MAIL_ERROR_PARSE) { /* error parsing */
             return 501;
         } else if (i == MAIL_ERROR_OOM) { /* server out of memory */
@@ -179,7 +181,9 @@ int smtp_parsel(char *line, enum server_stage *stage, struct mail *mail) {
         if (line_len < 8) return 501;
         
         /* parse out sending server and check return status */
-        i = mail_addattr(mail, TO, line + 8);
+        for (i = 8; i < line_len; i++)
+            if (line[i] != ' ') break; /* skip past whitespace */
+        i = mail_addattr(mail, TO, line + i);
         if (i == MAIL_ERROR_PARSE) { /* error parsing */
             return 501;
         } else if (i == MAIL_ERROR_OOM) { /* server out of memory */
