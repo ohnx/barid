@@ -14,8 +14,6 @@ supports IPv6. barid can output to standard output or into an Mbox format.
 
 Currently, there are no anti-spam features.
 
-
-
 Usage: ./barid [-p port] [-s] [-m mbox directory] [-k /path/to/key] [-c /path/to/cert] <host>
         -p      the port to listen on (defaults to 25)
         -s      output all mails to STDOUT
