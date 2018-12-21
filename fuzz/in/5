@@ -1,0 +1,12 @@
+EHLO localhost
+MAIL FROM:<isaac@example.net>
+RCPT TO:<sue@example.org>
+RCPT TO:<sally@example.net>
+DATA
+From: isaac@example.net
+From relay server example.net (127.0.0.1)
+
+subscribe to pewdiepie
+
+.
+QUIT
