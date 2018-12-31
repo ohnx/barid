@@ -1,6 +1,6 @@
 INCLUDES=-Iinclude/ -Idist/mbedtls/include
 LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509
-CFLAGS=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic
+CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic
 
 OBJ=objs/smtp.o objs/mail.o objs/server.o objs/mail_serialize.o objs/ssl.o
 OUTPUT=barid
@@ -24,22 +24,18 @@ objs/%.o: src/%.c
 $(OUTPUT): dist/libmbedtls.a $(OBJ)
 	$(CC) $^ -o $@ $(LIBS) $(CFLAGS)
 
-debug/hook_net.so: debug/hook_net.c
-	$(MAKE) -C debug/
-
-.PHONY: debugnet
-debugnet: $(OUTPUT) debug/hook_net.so
-	LD_PRELOAD=debug/hook_net.so ./$(OUTPUT)
-
 .PHONY: debug
-debug: CFLAGS += -g -O0 -fsanitize=address
+debug: CFLAGS += -g -O0
 debug: $(OUTPUT)
-	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT) -p 2525 example.com example.org example.net -s
+
+.PHONY: test
+test: debug
+	@-echo "Tests are a WIP"
 
 .PHONY: clean
 clean:
 	-rm -f $(OBJ)
 	-rm -f $(OUTPUT)
-	$(MAKE) clean -C debug/
-	$(MAKE) clean -C dist/mbedtls
+	-$(MAKE) clean -C debug/
+	-$(MAKE) clean -C dist/mbedtls
 
