@@ -1,8 +1,8 @@
-INCLUDES=-Iinclude/ -Idist/mbedtls/include
-LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509
-CFLAGS=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic -g -O0
+INCLUDES+=-Iinclude/ -Idist/mbedtls/include -Idist/inih
+LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih
+CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic
 
-OBJ=objs/smtp.o objs/mail.o objs/server.o objs/mail_serialize.o objs/ssl.o
+OBJ=objs/server.o objs/logger.o objs/worker.o
 OUTPUT=barid
 
 default: $(OUTPUT)
@@ -17,11 +17,16 @@ dist/libmbedtls.a:
 	$(MAKE) lib -C dist/mbedtls
 	cp dist/mbedtls/library/*.a dist/
 
+dist/libinih.a:
+	-@git submodule update --init --recursive
+	cd dist/inih; $(CC) -c -o ini.o ini.c $(CFLAGS) $(EXTRA)
+	ar rcs dist/libinih.a dist/inih/ini.o
+
 objs/%.o: src/%.c
 	@mkdir -p objs/
 	$(CC) -c -o $@ $< $(CFLAGS) $(EXTRA)
 
-$(OUTPUT): dist/libmbedtls.a $(OBJ)
+$(OUTPUT): dist/libmbedtls.a dist/libinih.a $(OBJ)
 	$(CC) $^ -o $@ $(LIBS)
 
 debug/hook_net.so: debug/hook_net.c
@@ -32,6 +37,7 @@ debugnet: $(OUTPUT) debug/hook_net.so
 	LD_PRELOAD=debug/hook_net.so ./$(OUTPUT)
 
 .PHONY: debug
+debug: CFLAGS+=-g -O0
 debug: $(OUTPUT)
 	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT) -p 2525 example.com example.org example.net -s
 

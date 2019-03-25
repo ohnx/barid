@@ -5,7 +5,7 @@
                       /_.___/\__,_/_/  /_/\__,_/   
                                                    
 
-barid is a simple mail server written in C for POSIX. barid is *not* a relaying
+barid is a simple mail server written in C for Linux. barid is *not* a relaying
 server; the intention is for barid to be run on a computer and receive mail
 from other Mail Transfer Agents (MTA's).
 

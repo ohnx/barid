@@ -1,3 +1,6 @@
 [submodule "dist/mbedtls"]
 	path = dist/mbedtls
 	url = https://github.com/ARMmbed/mbedtls.git
+[submodule "dist/inih"]
+	path = dist/inih
+	url = https://github.com/benhoyt/inih.git
