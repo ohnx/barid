@@ -39,6 +39,8 @@ struct client {
     int cfd;
     enum state state;
     mbedtls_ssl_context *ssl;
+    unsigned int bio;
+    unsigned char buf[LARGEBUF];
 };
 
 /* this struct holds internal info */
@@ -78,8 +80,8 @@ struct mail {
 /* version string */
 #define MAILVER "barid v1.0.0a"
 
-/* buffer for a single line of input from a server */
-#define LARGEBUF                8192
+/* buffer for a single line of input from a client */
+#define LARGEBUF                4096
 
 /* server configuration */
 extern struct barid_conf sconf;
