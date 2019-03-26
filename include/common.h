@@ -6,9 +6,54 @@
 /* sig_atomic_t */
 #include <signal.h>
 
+/* server configuration*/
 struct barid_conf {
     FILE *logger_fd;
 };
+
+/* states */
+enum state {
+    BRANDNEW,
+    HELO,
+    MAIL,
+    RCPT,
+    DATA,
+    END_DATA,
+    QUIT
+};
+
+/* handle for clients */
+struct client {
+    int cfd;
+    enum state state;
+};
+
+/* this struct holds internal info */
+struct mail_internal_info {
+    int to_total_len;
+    int data_total_len;
+    unsigned char using_ssl;
+    struct sockaddr_storage *origin_ip;
+};
+
+/* mail info that networker fills out and that serworker serializes */
+struct mail {
+    /* the server that this mail is from */
+    int froms_c;
+    char *froms_v;
+    /* the email address that this mail is from */
+    int from_c;
+    char *from_v;
+    /* email addresses this email is to */
+    int to_c; /* total length of email address string */
+    char *to_v; /* null-separated array of to email addresses */
+    /* message data */
+    int data_c;
+    char *data_v;
+    /* extra information (a null `extra` indicates this email is READONLY) */
+    struct mail_internal_info *extra;
+};
+
 
 /* max length of an email's recipients (in bytes)
  * 512 recipients @ 256 bytes per email = 131072 B (128 KiB) */

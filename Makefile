@@ -2,7 +2,7 @@ INCLUDES+=-Iinclude/ -Idist/mbedtls/include -Idist/inih
 LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih
 CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic
 
-OBJ=objs/server.o objs/logger.o objs/worker.o
+OBJ=objs/server.o objs/logger.o objs/networker.o objs/serworker.o
 OUTPUT=barid
 
 default: $(OUTPUT)

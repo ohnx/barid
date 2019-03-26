@@ -20,8 +20,10 @@
 #include "common.h"
 /* logger_log() */
 #include "logger.h"
-/* struct worker */
-#include "worker.h"
+/* struct networker */
+#include "networker.h"
+/* struct serworker */
+#include "serworker.h"
 
 /* global variables */
 struct barid_conf sconf;
@@ -29,15 +31,17 @@ sig_atomic_t running = 1;
 
 /* main function */
 int main(int argc, char **argv) {
-    int sfd, efd, pfd, cfd, port, nwork, i, flg;
-    struct worker *workers;
+    int sfd, efd, pfd[2], cfd, port, nwork, swork, i, flg;
+    struct networker *networkers;
+    struct serworker *serworkers;
     struct epoll_event epint = {0};
     struct sockaddr_in6 saddr = {0};
 
     /* temp debug since configuration isn't set up */
     sconf.logger_fd = stderr;
     port = 8712;
-    nwork = 2;
+    nwork = 1;
+    swork = 1;
 
     /* hi, world! */
     logger_log(INFO, "%s starting!", MAILVER);
@@ -72,28 +76,51 @@ int main(int argc, char **argv) {
     }
 
     /* set up epoll */
-    efd = epoll_create(32);
+    if ((efd = epoll_create(32) < 0) {
+        logger_log(ERR, "Could not set up epoll!");
+        return -__LINE__;
+    }
     /* initially we only care about when the socket is ready to write to */
     epint.events = EPOLLOUT | EPOLLONESHOT;
 
-    /* set up serialization workers */
-    pfd = 0;
+    /* set up event */
+    if (pipe(pfd) < 0) {
+        logger_log(ERR, "Could not initialize pipe for workers!");
+        return -__LINE__;
+    }
 
     /* set up worker threads' handles */
-    workers = calloc(sizeof(*workers), nwork);
-    if (!workers) {
+    networkers = calloc(sizeof(*networkers), nwork);
+    if (!networkers) {
         logger_log(ERR, "System OOM");
         return -__LINE__;
     }
 
-    /* set up workers */
+    /* set up networkers */
     for (i = 0; i < nwork; i++) {
         /* set relevant variables */
-        workers[i].efd = efd;
-        workers[i].pfd = pfd;
+        networkers[i].efd = efd;
+        networkers[i].pfd = pfd[1]; /* write end */
 
         /* create nwork workers */
-        if (pthread_create(&(workers[i].thread), NULL, worker_loop, workers + i)) {
+        if (pthread_create(&(networkers[i].thread), NULL, networker_loop, networkers + i)) {
+            logger_log(ERR, "Failed to create worker thread");
+            exit(-__LINE__);
+        }
+    }
+
+    /* set up worker threads' handles */
+    serworkers = calloc(sizeof(*serworkers), swork);
+    if (!serworkers) {
+        logger_log(ERR, "System OOM");
+        return -__LINE__;
+    }
+
+    /* set up serializing workers */
+    for (i = 0; i < swork; i++) {
+        /* create swork workers */
+        networkers[i].pfd = pfd[0]; /* read end */
+        if (pthread_create(&(serworkers[i].thread), NULL, serworker_loop, serworkers + i)) {
             logger_log(ERR, "Failed to create worker thread");
             exit(-__LINE__);
         }

@@ -8,13 +8,13 @@
 
 /* running flag */
 #include "common.h"
-/* struct worker */
-#include "worker.h"
+/* struct networker */
+#include "networker.h"
 /* logger_log() */
 #include "logger.h"
 
-void *worker_loop(void *z) {
-    struct worker *self = (struct worker *)z;
+void *networker_loop(void *z) {
+    struct networker *self = (struct networker *)z;
     struct epoll_event epevnt;
     struct client *client;
     unsigned char buf[4096];
