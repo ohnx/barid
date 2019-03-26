@@ -1,13 +1,14 @@
-#ifndef __NETWORKER_H_INC
-#define __NETWORKER_H_INC
+#ifndef __SERWORKER_H_INC
+#define __SERWORKER_H_INC
 
 /* pthread_t */
 #include <pthread.h>
 
+int serworker_deliver(int fd, struct mail *mail);
 void *serworker_loop(void *z);
 
-/* handle for networkers */
-struct networker {
+/* handle for SERWORKERs */
+struct serworker {
     /* thread handle */
     pthread_t thread;
 
@@ -15,4 +16,4 @@ struct networker {
     int pfd;
 };
 
-#endif /* __NETWORKER_H_INC */
+#endif /* __SERWORKER_H_INC */

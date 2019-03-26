@@ -1,4 +1,5 @@
 /* this file reads in the configuration and initializes sockets and stuff */
+#define _GNU_SOURCE
 /* malloc() */
 #include <stdlib.h>
 /* socket(), setsockopt(), bind(), listen() */
@@ -39,6 +40,7 @@ int main(int argc, char **argv) {
 
     /* temp debug since configuration isn't set up */
     sconf.logger_fd = stderr;
+    sconf.flgs = 0;
     port = 8712;
     nwork = 1;
     swork = 1;
@@ -76,14 +78,14 @@ int main(int argc, char **argv) {
     }
 
     /* set up epoll */
-    if ((efd = epoll_create(32) < 0) {
+    if ((efd = epoll_create(32)) < 0) {
         logger_log(ERR, "Could not set up epoll!");
         return -__LINE__;
     }
     /* initially we only care about when the socket is ready to write to */
-    epint.events = EPOLLOUT | EPOLLONESHOT;
+    epint.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
 
-    /* set up event */
+    /* set up pipe for serialization consumption */
     if (pipe(pfd) < 0) {
         logger_log(ERR, "Could not initialize pipe for workers!");
         return -__LINE__;
@@ -119,7 +121,7 @@ int main(int argc, char **argv) {
     /* set up serializing workers */
     for (i = 0; i < swork; i++) {
         /* create swork workers */
-        networkers[i].pfd = pfd[0]; /* read end */
+        serworkers[i].pfd = pfd[0]; /* read end */
         if (pthread_create(&(serworkers[i].thread), NULL, serworker_loop, serworkers + i)) {
             logger_log(ERR, "Failed to create worker thread");
             exit(-__LINE__);

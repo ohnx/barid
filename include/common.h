@@ -5,27 +5,40 @@
 #include <stdio.h>
 /* sig_atomic_t */
 #include <signal.h>
+/* mbedtls_ssl_context */
+#include "mbedtls/ssl.h"
 
 /* server configuration*/
 struct barid_conf {
     FILE *logger_fd;
+    unsigned char flgs;
 };
+
+#define SSL_ENABLED 0x1
 
 /* states */
 enum state {
+    /* brand new; waiting for write ready to send greeting */
     BRANDNEW,
+    /* waiting for HELO */
     HELO,
+    /* waiting for MAIL */
     MAIL,
+    /* waiting for RCPT */
     RCPT,
+    /* waiting for RCPT or DATA*/
     DATA,
+    /* waiting for end of DATA ('.') */
     END_DATA,
-    QUIT
+    /* waiting for SSL handshake to complete */
+    SSL_HS
 };
 
 /* handle for clients */
 struct client {
     int cfd;
     enum state state;
+    mbedtls_ssl_context *ssl;
 };
 
 /* this struct holds internal info */
@@ -66,7 +79,7 @@ struct mail {
 #define MAILVER "barid v1.0.0a"
 
 /* buffer for a single line of input from a server */
-#define LARGEBUF                4096
+#define LARGEBUF                8192
 
 /* server configuration */
 extern struct barid_conf sconf;
