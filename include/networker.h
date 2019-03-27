@@ -6,6 +6,20 @@
 
 void *networker_loop(void *z);
 
+/* verbs that this server supports */
+enum known_verbs {
+    DATA,
+    EHLO,
+    HELO,
+    MAIL,
+    NOOP,
+    QUIT,
+    RSET,
+    RCPT,
+    STLS, /* starttls */
+    UNKN /* unknown */
+};
+
 /* handle for networkers */
 struct networker {
     /* thread handle */

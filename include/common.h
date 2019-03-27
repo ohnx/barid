@@ -10,7 +10,9 @@
 
 /* server configuration*/
 struct barid_conf {
+    /* FILE handle for the logger */
     FILE *logger_fd;
+    /* flags for the configuration */
     unsigned char flgs;
 };
 
@@ -36,10 +38,15 @@ enum state {
 
 /* handle for clients */
 struct client {
+    /* client file descriptor */
     int cfd;
+    /* the state of the client */
     enum state state;
+    /* SSL context */
     mbedtls_ssl_context *ssl;
+    /* how many bytes of the input buffer have already been used */
     unsigned int bio;
+    /* input buffer */
     unsigned char buf[LARGEBUF];
 };
 

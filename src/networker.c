@@ -18,23 +18,14 @@
 /* logger_log() */
 #include "logger.h"
 
-/**
- * I've hit a roadblock here.
- * 
- * My issue is that when I read in a 8192 bytes, I don't know when the line
- * will end.
- * 
- * I can resolve this if each client has a running buffer that I use.
- * 
- * I guess that is doable.
- */
-
 void *networker_loop(void *z) {
     struct networker *self = (struct networker *)z;
     struct epoll_event epevnt;
     struct client *client;
-    char *lns;
-    int rcn;
+
+    int rcn, ll, i, lc;
+    unsigned char *lns, *lptr;
+    enum known_verbs lverb;
 
 start:
     if (epoll_wait(self->efd, &epevnt, 1, -1) < 0) goto end;
@@ -56,23 +47,23 @@ start:
         /* update stage */
         client->state = HELO;
 
-        goto next;
+        goto next_evt;
     }
 
-    /* ??? */
+    /* ??? programmer error?? */
     if (!(epevnt.events & EPOLLIN)) {
         logger_log(WARN, "wat %d", epevnt.events);
-        goto next;
+        goto next_evt;
     }
 
     /* for some states it is unsafe to perform a read right away */
     if (client->state == SSL_HS) {
         if (!net_sssl(client)) goto client_cleanup;
-        else goto next;
+        else goto next_evt;
     }
 
-    /* now we can read data safely */
-    client->len = net_rx(client, buf, LARGEBUF);
+    /* now we know we can read data safely */
+    rcn = net_rx(client, buf, LARGEBUF - client->bio - 1);
 
     /* check for errors */
     if (rcn == 0) { /* Remote host closed connection */
@@ -84,106 +75,105 @@ start:
         case MBEDTLS_ERR_SSL_ASYNC_IN_PROGRESS:
         case MBEDTLS_ERR_SSL_CRYPTO_IN_PROGRESS:
         case MBEDTLS_ERR_SSL_CLIENT_RECONNECT:
-            goto next;
+            goto next_evt;
         default:
             goto client_cleanup;
         }
     }
 
     /* null-terminate data */
-    client->buf[client->bio + rcn] = 0; /* null terminate the end string! :D */
+    client->buf[client->bio + rcn] = 0; /* null terminate for strstr safety */
 
     /* update the offset */
-    lns = client->buf;
     client->bio += rcn;
 
-    /* search for first newline */
-    eol = strstr(client->buf, "\r\n");
+    /* start from the start of the buffer */
+    lns = client->buf;
 
-    /* first newline not found */
-    if (eol == NULL) {
-        /* overflow; line too long */
-        if (client->bio + rcn >= LARGEBUF - 1) {
-            smtp_handlecode(500, client);
+next_line:
+    if (!(lptr = strstr(lns, "\r\n")))
+        goto parsing_done; /* done reading all lines */
 
-            /* reset the count and keep going */
-            client->bio = 0;
-            continue;
-        } else {
-            /* keep expecting more data */
-            continue;
+    /* this line starts at lns and ends at lptr */
+    ll = lptr - lns;
+
+    /* convert verb to upper case if it's in lower case */
+    for (i = 0; i < 4; i++) {
+        if (line[i] >= 'a' && line[i] <= 'z') {
+            line[i] -= 32;
         }
     }
 
-    /* keep parsing lines */
-    do {
-        /* Null-terminate this line */
-        *eol = 0;
+    /* this is slightly faster than strcmp'ing each verb */
+    lverb = UNKN;
+    switch (*lns) {
+    case 'D': if (!strncmp(lns, "DATA", 4)) lverb = DATA; break;
+    case 'E': if (!strncmp(lns, "EHLO", 4)) lverb = EHLO; break;
+    case 'H': if (!strncmp(lns, "HELO", 4)) lverb = HELO; break;
+    case 'M': if (!strncmp(lns, "MAIL", 4)) lverb = MAIL; break;
+    case 'N': if (!strncmp(lns, "NOOP", 4)) lverb = NOOP; break;
+    case 'Q': if (!strncmp(lns, "QUIT", 4)) lverb = QUIT; break;
+    case 'R': if (!strncmp(lns, "RSET", 4)) lverb = RSET;
+              else if (!strncmp(lns, "RCPT", 4)) lverb = RCPT; break;
+    case 'S': if (!strncmp(lns, "STARTTLS", 8)) lverb = STLS; break;
+    }
 
-        /* are we processing verbs or what? */
-        if (stage != END_DATA) { /* processing a verb */
-            /* smtp_handlecode returns 1 when server should quit */
-            if (smtp_handlecode(smtp_parsel(lns, &stage, mail), conn))
-                    goto client_cleanup;
-            if (stage == MAIL && srv == NULL)
-                srv = _m_strdup(mail->froms_v);
-        } else { /* processing message data */
-            /* check for end of data */
-            if (!strcmp(lns, ".")) {
-                /* `deliver` this mail */
-                deliver_status = mail_serialize(mail, server_sf);
+    /* default = 250 OK */
+    lc = 250;
 
-                /* end of data! send message and set status to MAIL */
-                if (!deliver_status) smtp_handlecode(250, conn);
-                else smtp_handlecode(422, conn);
-
-                /* end of data! send OK message and set status to MAIL */
-                stage = MAIL;
-
-                /* reset the mail */
-                mail_reset(mail);
-            } else {
-                /* change \0\n to \n\0 */
-                *eol = '\n';
-                *(eol + 1) = 0;
-                /* append data and check for errors */
-                rcn = mail_appenddata(mail, lns);
-                if (rcn == MAIL_ERROR_DATAMAX) {
-                    smtp_handlecode(522, conn);
-                } else if (rcn == MAIL_ERROR_OOM) {
-                    smtp_handlecode(451, conn);
-                }
-            }
-        }
-
-        /* advance lns and eol and keep looking for more lines */
-        eol += 2;
-        lns = eol;
-    } while ((eol = strstr(eol, "\r\n")) != NULL);
-
-    /* update data offsets and buffer */
-    memmove(client->buf, lns, LARGEBUF - (lns - client->buf));
-    client->bio -= (lns - client->buf);
-
-
-    switch(client->state) {
-    case SSL_HS:
-        /* keep trying to handshake */
-        if (!net_sssl(client)) goto client_cleanup;
-        break;
+    switch (lverb) {
+    case NOOP: break;
+    case UNKN: lc = 502; break; /* 502 command unknown */
+    case EHLO: lc = 8250; /* 8250 is a custom code for EHLO response */
     case HELO:
+        /* TODO: store the sending server */
+        break;
+    case STLS:
+        if (!(sconf->flags & SSL_ENABLED)) { lc = 502; break; } /* 502 command unknown */
+        if (client->state != MAIL) { lc = 503; break; } /* 503 wrong sequence */
+        lc = 8220; /* 8220 is a custom code for starting TLS handshake */
+        break;
+    case MAIL:
+    case RCPT:
+
+    case DATA:
         
-    default:
-        len = net_rx(client, buf, 4096);
-        if (*buf == '*') {
-            serworker_deliver(self->pfd, (struct mail *)(1));
-        }
-        net_tx(client, buf, len);
+    case QUIT:
+    case RSET:
         break;
     }
 
-next:
-    /* resume listening for data from the socket */
+    /* send the code for this line */
+    if (!smtp_handlecode(client, lc))
+        /* error sending response */
+        goto client_cleanup;
+    else
+        /* no problemo, go to next line */
+        goto next_line;
+
+    /* update our search to begin at the end of lptr */
+    lns = lptr + 2;
+
+    /* search for next line */
+    goto next_line;
+
+parsing_done:
+    if (lns == client->buf) {
+        if (client->bio + 1 >= LARGEBUF) {
+            /* no newlines found and the data is at max length; this line is too long */
+            /* TODO: send 500 */
+            goto client_cleanup; /* TODO: quit or reset connection? */
+        }
+        /* no newlines here, but there's still room, so just read more. */
+    } else {
+        /* subtract how much we have consumed */
+        client->bio -= (client->buf - lns);
+        /* delete what has been consumed by shifting over the memory */
+        memmove(client->buf, lns, client->bio);
+    }
+
+next_evt:
+    /* resume listening for data from this client on the socket */
     epevnt.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
     if (epoll_ctl(self->efd, EPOLL_CTL_MOD, client->cfd, &epevnt) < 0) {
         logger_log(WARN, "Failed to listen to client %d!", client->cfd);

@@ -1,5 +1,4 @@
 /* this file reads in the configuration and initializes sockets and stuff */
-#define _GNU_SOURCE
 /* malloc() */
 #include <stdlib.h>
 /* socket(), setsockopt(), bind(), listen() */
