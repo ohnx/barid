@@ -3,6 +3,7 @@ LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih
 CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic
 
 OBJ=objs/server.o objs/logger.o objs/networker.o objs/serworker.o objs/net.o
+OBJ+=objs/smtp.o
 OUTPUT=barid
 
 default: $(OUTPUT)

@@ -8,16 +8,16 @@ void *networker_loop(void *z);
 
 /* verbs that this server supports */
 enum known_verbs {
-    DATA,
-    EHLO,
-    HELO,
-    MAIL,
-    NOOP,
-    QUIT,
-    RSET,
-    RCPT,
-    STLS, /* starttls */
-    UNKN /* unknown */
+    V_DATA,
+    V_EHLO,
+    V_HELO,
+    V_MAIL,
+    V_NOOP,
+    V_QUIT,
+    V_RSET,
+    V_RCPT,
+    V_STLS, /* starttls */
+    V_UNKN /* unknown */
 };
 
 /* handle for networkers */

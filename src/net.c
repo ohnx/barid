@@ -24,10 +24,10 @@ mbedtls_x509_crt srvcert;
 mbedtls_pk_context pkey;
 
 /* called in a thread context */
-int net_rx(struct client *client, unsigned char *buf, size_t bufsz) {
+int net_rx(struct client *client) {
     if (!(sconf.flgs & SSL_ENABLED) || !(client->ssl))
-        return read(client->cfd, buf, bufsz);
-    return mbedtls_ssl_read(client->ssl, (unsigned char *)buf, bufsz);
+        return read(client->cfd, client->buf + client->bio, LARGEBUF - client->bio - 1);
+    return mbedtls_ssl_read(client->ssl, (unsigned char *)(client->buf + client->bio), LARGEBUF - client->bio - 1);
 }
 
 /* called in a thread context */
@@ -44,7 +44,7 @@ int net_sssl(struct client *client) {
     if (!(sconf.flgs & SSL_ENABLED) || !client) return -1;
 
     if (client->ssl) {
-        if (client->state == SSL_HS) goto hs_step;
+        if (client->state == S_SSL_HS) goto hs_step;
         else return -2; /* SSL already started */
     }
 
@@ -60,7 +60,7 @@ int net_sssl(struct client *client) {
     mbedtls_ssl_set_bio(client->ssl, &(client->cfd), mbedtls_net_send, mbedtls_net_recv, NULL);
 
     /* set the correct state */
-    client->state = SSL_HS;
+    client->state = S_SSL_HS;
 
 hs_step:
     /* perform SSL handshake */
@@ -69,7 +69,7 @@ hs_step:
     switch (ret) {
     case 0:
         /* handshake done */
-        client->state = HELO;
+        client->state = S_HELO;
         break;
     case MBEDTLS_ERR_SSL_WANT_READ:
     case MBEDTLS_ERR_SSL_WANT_WRITE:

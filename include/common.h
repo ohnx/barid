@@ -8,6 +8,17 @@
 /* mbedtls_ssl_context */
 #include "mbedtls/ssl.h"
 
+
+/* max length of an email's recipients (in bytes)
+ * 512 recipients @ 256 bytes per email = 131072 B (128 KiB) */
+#define MAIL_MAX_TO_C           131072
+
+/* max length of an email (in bytes) - default is 16777216 B (16 MiB) */
+#define MAIL_MAX_DATA_C         16777216
+
+/* buffer for a single line of input from a client */
+#define LARGEBUF                4096
+
 /* server configuration*/
 struct barid_conf {
     /* FILE handle for the logger */
@@ -21,19 +32,19 @@ struct barid_conf {
 /* states */
 enum state {
     /* brand new; waiting for write ready to send greeting */
-    BRANDNEW,
+    S_BRANDNEW,
     /* waiting for HELO */
-    HELO,
+    S_HELO,
     /* waiting for MAIL */
-    MAIL,
+    S_MAIL,
     /* waiting for RCPT */
-    RCPT,
+    S_RCPT,
     /* waiting for RCPT or DATA*/
-    DATA,
+    S_DATA,
     /* waiting for end of DATA ('.') */
-    END_DATA,
+    S_END_DATA,
     /* waiting for SSL handshake to complete */
-    SSL_HS
+    S_SSL_HS
 };
 
 /* handle for clients */
@@ -76,19 +87,8 @@ struct mail {
     struct mail_internal_info *extra;
 };
 
-
-/* max length of an email's recipients (in bytes)
- * 512 recipients @ 256 bytes per email = 131072 B (128 KiB) */
-#define MAIL_MAX_TO_C           131072
-
-/* max length of an email (in bytes) - default is 16777216 B (16 MiB) */
-#define MAIL_MAX_DATA_C         16777216
-
 /* version string */
 #define MAILVER "barid v1.0.0a"
-
-/* buffer for a single line of input from a client */
-#define LARGEBUF                4096
 
 /* server configuration */
 extern struct barid_conf sconf;
