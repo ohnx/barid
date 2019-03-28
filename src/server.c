@@ -154,6 +154,8 @@ int main(int argc, char **argv) {
             continue;
         }
         ((struct client *)(epint.data.ptr))->cfd = cfd;
+        ((struct client *)(epint.data.ptr))->state = S_BRANDNEW;
+        ((struct client *)(epint.data.ptr))->bio = 0;
 
         /* add it to the epoll interest list */
         if (epoll_ctl(efd, EPOLL_CTL_ADD, cfd, &epint) < 0) {

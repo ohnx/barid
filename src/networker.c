@@ -104,6 +104,14 @@ next_line:
 
     /* Check if we are in data mode */
     if (client->state == S_END_DATA) {
+        if (*lns == '.' && lns[1] == '\r') {
+            /* TODO: deliver the mail by writing the pointer to pfd */
+            serworker_deliver(self->pfd, NULL);
+            client->state = S_MAIL;
+            lc = 250;
+            goto line_handle_code;
+        }
+
         /* TODO: append data to mail */
         goto next_line;
     }
@@ -144,6 +152,7 @@ next_line:
     case V_EHLO:
         lc = 8250; /* 8250 is a custom code for EHLO response */
     case V_HELO:
+        if (client->state != S_HELO) { lc = 503; break; } /* 503 wrong sequence */
         /* TODO: store the sending server */
         client->state = S_MAIL;
         break;
@@ -193,6 +202,7 @@ next_line:
         break;
     }
 
+line_handle_code:
     /* send the code for this line */
     if (smtp_handlecode(client, lc))
         /* error sending response */

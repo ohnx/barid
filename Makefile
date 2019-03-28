@@ -38,8 +38,8 @@ debugnet: $(OUTPUT) debug/hook_net.so
 	LD_PRELOAD=debug/hook_net.so ./$(OUTPUT)
 
 .PHONY: debug
-debug: CFLAGS+=-g -O0
 debug: $(OUTPUT)
+debug: CFLAGS+=-g -O0
 	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT) -p 2525 example.com example.org example.net -s
 
 .PHONY: clean
