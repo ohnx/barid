@@ -5,9 +5,10 @@
 #include <stdio.h>
 /* sig_atomic_t */
 #include <signal.h>
+/* struct sockaddr_in6 */
+#include <netinet/in.h>
 /* mbedtls_ssl_context */
 #include "mbedtls/ssl.h"
-
 
 /* max length of an email's recipients (in bytes)
  * 512 recipients @ 256 bytes per email = 131072 B (128 KiB) */
@@ -21,13 +22,26 @@
 
 /* server configuration*/
 struct barid_conf {
-    /* FILE handle for the logger */
-    FILE *logger_fd;
-    /* flags for the configuration */
-    unsigned char flgs;
+    /* general */
+    char *host;
+    char **domains;
+
+    /* workers */
+    int network, delivery;
+
+    /* network */
+    struct sockaddr_in6 bind;
+
+    /* ssl */
+    char *ssl_key;
+    char *ssl_cert;
+    char ssl_enabled;
+
+    /* delivery */
+    char *modules;
 };
 
-#define SSL_ENABLED 0x1
+#define BC_FLG_SSL_ENABLED 0x1
 
 /* states */
 enum state {
@@ -89,9 +103,6 @@ struct mail {
 
 /* version string */
 #define MAILVER "barid v1.0.0a"
-
-/* server configuration */
-extern struct barid_conf sconf;
 
 /* running flag */
 extern sig_atomic_t running;

@@ -4,6 +4,9 @@
 /* pthread_t */
 #include <pthread.h>
 
+/* struct barid_conf */
+#include "common.h"
+
 void *networker_loop(void *z);
 
 /* verbs that this server supports */
@@ -24,6 +27,9 @@ enum known_verbs {
 struct networker {
     /* thread handle */
     pthread_t thread;
+
+    /* main barid config */
+    struct barid_conf *sconf;
 
     /* epoll fd */
     int efd;

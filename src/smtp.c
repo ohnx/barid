@@ -20,7 +20,8 @@ int smtp_handlecode(struct client *client, int code) {
     case 250: return net_tx(client, (ucp)"250 OK\r\n", 8) > 0 ? 0 : 1; /* close on error */
     case 8250: /* returned by EHLO 250 OK */
         net_tx(client, (ucp)"250-barid mail server\r\n", 23);
-        if (sconf.flgs & SSL_ENABLED) net_tx(client, (ucp)"250-STARTTLS\r\n", 14);
+        /* TODO: add STARTTLS */
+        if (0) net_tx(client, (ucp)"250-STARTTLS\r\n", 14);
         return net_tx(client, (ucp)"250 RSET\r\n", 10) > 0 ? 0 : 1;
     /* 300-family */
     case 354: return net_tx(client, (ucp)"354 SEND DATA PLZ!\r\n", 20) > 0 ? 0 : 1;

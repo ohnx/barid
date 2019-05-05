@@ -59,6 +59,7 @@ start:
 
     /* for some states it is unsafe to perform a read right away */
     if (client->state == S_SSL_HS) {
+        /* in the middle of an SSL handshake */
         if (!net_sssl(client)) goto client_cleanup;
         else goto next_evt;
     }
@@ -76,6 +77,7 @@ start:
         case MBEDTLS_ERR_SSL_ASYNC_IN_PROGRESS:
         case MBEDTLS_ERR_SSL_CRYPTO_IN_PROGRESS:
         case MBEDTLS_ERR_SSL_CLIENT_RECONNECT:
+            /* no error, just need to read some more data */
             goto next_evt;
         default:
             goto client_cleanup;
@@ -157,7 +159,7 @@ next_line:
         client->state = S_MAIL;
         break;
     case V_STLS:
-        if (!(sconf.flgs & SSL_ENABLED)) { lc = 502; break; } /* 502 command unknown */
+        if (!(self->sconf->ssl_enabled)) { lc = 502; break; } /* 502 command unknown */
         if (client->state != S_MAIL) { lc = 503; break; } /* 503 wrong sequence */
         lc = 8220; /* 8220 is a custom code for starting TLS handshake */
         break;

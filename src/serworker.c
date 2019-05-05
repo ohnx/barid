@@ -25,13 +25,14 @@ start:
     len = read(self->pfd, &mail, sizeof(mail));
 
     if (len != sizeof(mail)) {
-        logger_log(WARN, "Failed to deliver a mail!");
-        goto start;
+        /*logger_log(WARN, "Failed to deliver a mail!");*/
+        goto next;
     }
 
     /* serialize it */
     logger_log(INFO, "Delivering mail at address %p", mail);
 
+next:
     if (!running) goto end;
     else goto start;
 

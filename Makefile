@@ -33,19 +33,17 @@ $(OUTPUT): dist/libmbedtls.a dist/libinih.a $(OBJ)
 debug/hook_net.so: debug/hook_net.c
 	$(MAKE) -C debug/
 
-.PHONY: debugnet
-debugnet: $(OUTPUT) debug/hook_net.so
-	LD_PRELOAD=debug/hook_net.so ./$(OUTPUT)
-
 .PHONY: debug
 debug: $(OUTPUT)
 debug: CFLAGS+=-g -O0
 	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT) -p 2525 example.com example.org example.net -s
 
+.PHONY: gcov
+gcov: debug
+gxov: CFLAGS+=-fprofile-arcs -ftest-coverage
+
 .PHONY: clean
 clean:
 	-rm -f $(OBJ)
 	-rm -f $(OUTPUT)
-	$(MAKE) clean -C debug/
-	$(MAKE) clean -C dist/mbedtls
 

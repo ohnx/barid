@@ -17,22 +17,23 @@
 /* logger */
 #include "logger.h"
 
-mbedtls_entropy_context entropy;
-mbedtls_ctr_drbg_context ctr_drbg;
-mbedtls_ssl_config ssl_conf;
-mbedtls_x509_crt srvcert;
-mbedtls_pk_context pkey;
+static mbedtls_entropy_context entropy;
+static mbedtls_ctr_drbg_context ctr_drbg;
+static mbedtls_ssl_config ssl_conf;
+static mbedtls_x509_crt srvcert;
+static mbedtls_pk_context pkey;
+static char ssl_init = 0;
 
 /* called in a thread context */
 int net_rx(struct client *client) {
-    if (!(sconf.flgs & SSL_ENABLED) || !(client->ssl))
+    if (!(client->ssl))
         return read(client->cfd, client->buf + client->bio, LARGEBUF - client->bio - 1);
     return mbedtls_ssl_read(client->ssl, (unsigned char *)(client->buf + client->bio), LARGEBUF - client->bio - 1);
 }
 
 /* called in a thread context */
 int net_tx(struct client *client, unsigned char *buf, size_t bufsz) {
-    if (!(sconf.flgs & SSL_ENABLED) || !(client->ssl))
+    if (!(client->ssl))
         return write(client->cfd, buf, bufsz);
     return mbedtls_ssl_write(client->ssl, (unsigned char *)buf, bufsz);
 }
@@ -41,7 +42,8 @@ int net_tx(struct client *client, unsigned char *buf, size_t bufsz) {
 /* initiate SSL handshake */
 int net_sssl(struct client *client) {
     int ret;
-    if (!(sconf.flgs & SSL_ENABLED) || !client) return -1;
+    /* TODO: fix check for if SSL is enabled or not */
+    if (!client) return -1;
 
     if (client->ssl) {
         if (client->state == S_SSL_HS) goto hs_step;
@@ -87,14 +89,14 @@ hs_step:
 
 /* called in a thread context */
 int net_close(struct client *client) {
-    if (!(sconf.flgs & SSL_ENABLED) || !(client->ssl))
+    if (!(client->ssl))
         return close(client->cfd);
     mbedtls_ssl_close_notify(client->ssl);
     mbedtls_ssl_free(client->ssl);
     return 0;
 }
 
-int net_init(const char *ssl_cert, const char *ssl_key) {
+int net_init_ssl(const char *ssl_cert, const char *ssl_key) {
     int r;
 
     /* initialize all the variables */
@@ -140,10 +142,12 @@ int net_init(const char *ssl_cert, const char *ssl_key) {
         logger_log(ERR, "Failed to set own certificate!"); return r;
     }
 
+    ssl_init = 1;
     return 0;
 }
 
-void net_deinit() {
+void net_deinit_ssl() {
+    if (!ssl_init) return;
     mbedtls_x509_crt_free(&srvcert);
     mbedtls_pk_free(&pkey);
     mbedtls_ssl_config_free(&ssl_conf);

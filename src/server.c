@@ -1,23 +1,31 @@
 /* this file reads in the configuration and initializes sockets and stuff */
 /* malloc() */
 #include <stdlib.h>
+/* strcmp(), memcpy() */
+#include <string.h>
 /* socket(), setsockopt(), bind(), listen() */
 #include <sys/socket.h>
 /* struct sockaddr_in6 */
 #include <netinet/in.h>
+/* inet_pton() */
+#include <arpa/inet.h>
 /* fnctl() */
 #include <unistd.h>
 /* fnctl() */
 #include <fcntl.h>
-/* sig_atomic_t */
+/* sig_atomic_t, struct sigaction, sigaction(), etc. */
 #include <signal.h>
 /* epoll-family functions */
 #include <sys/epoll.h>
 /* pthread-family functions */
 #include <pthread.h>
+/* ini_parse */
+#include <ini.h>
 
-/* MAIL_VER */
+/* MAIL_VER, struct barid_conf */
 #include "common.h"
+/* net_init_ssl() */
+#include "net.h"
 /* logger_log() */
 #include "logger.h"
 /* struct networker */
@@ -26,23 +34,31 @@
 #include "serworker.h"
 
 /* global variables */
-struct barid_conf sconf;
 sig_atomic_t running = 1;
+
+/* configuration parser (see below) */
+static int server_conf(void *conf, const char *section, const char *key, const char *value);
+
+/* signal handler */
+void cleanup(int signum) {
+    if (signum != SIGHUP) running = 0;
+}
 
 /* main function */
 int main(int argc, char **argv) {
-    int sfd, efd, pfd[2], cfd, port, nwork, swork, i, flg;
+    int sfd, efd, pfd[2], cfd, i, flg;
+    struct barid_conf config = {0};
     struct networker *networkers;
     struct serworker *serworkers;
     struct epoll_event epint = {0};
-    struct sockaddr_in6 saddr = {0};
+    struct sigaction action;
 
-    /* temp debug since configuration isn't set up */
-    sconf.logger_fd = stderr;
-    sconf.flgs = 0;
-    port = 8712;
-    nwork = 1;
-    swork = 1;
+    /* load configuration */
+    config.bind.sin6_family = AF_INET6;
+    if (ini_parse(argc == 2 ? argv[1] : "barid.ini", server_conf, &config) < 0) {
+        logger_log(ERR, "Could not load configuration file %s", argc == 2 ? argv[1] : "barid.ini");
+        return -__LINE__;
+    }
 
     /* hi, world! */
     logger_log(INFO, "%s starting!", MAILVER);
@@ -50,7 +66,7 @@ int main(int argc, char **argv) {
     /* start by creating a socket */
     if ((sfd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
         logger_log(ERR, "Could not create a socket!");
-        return -1;
+        return -__LINE__;
     }
 
     /* be nice.. set SO_REUSEADDR */
@@ -59,14 +75,9 @@ int main(int argc, char **argv) {
         logger_log(WARN, "Could not set SO_REUSEADDR on socket!");
     }
 
-    /* set all the options to listen to all interfaces; TODO customizeable */
-    saddr.sin6_family = AF_INET6;
-    saddr.sin6_port   = htons(port);
-    saddr.sin6_addr   = in6addr_any;
-
     /* bind port */
-    if (bind(sfd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
-        logger_log(ERR, "Could not bind to the port %d!", port);
+    if (bind(sfd, (struct sockaddr *)&(config.bind), sizeof(config.bind)) < 0) {
+        logger_log(ERR, "Could not bind to the port %d!", ntohs(config.bind.sin6_port));
         return -__LINE__;
     }
 
@@ -91,14 +102,14 @@ int main(int argc, char **argv) {
     }
 
     /* set up worker threads' handles */
-    networkers = calloc(sizeof(*networkers), nwork);
+    networkers = calloc(sizeof(*networkers), config.network);
     if (!networkers) {
         logger_log(ERR, "System OOM");
         return -__LINE__;
     }
 
     /* set up networkers */
-    for (i = 0; i < nwork; i++) {
+    for (i = 0; i < config.network; i++) {
         /* set relevant variables */
         networkers[i].efd = efd;
         networkers[i].pfd = pfd[1]; /* write end */
@@ -111,14 +122,14 @@ int main(int argc, char **argv) {
     }
 
     /* set up worker threads' handles */
-    serworkers = calloc(sizeof(*serworkers), swork);
+    serworkers = calloc(sizeof(*serworkers), config.delivery);
     if (!serworkers) {
         logger_log(ERR, "System OOM");
         return -__LINE__;
     }
 
     /* set up serializing workers */
-    for (i = 0; i < swork; i++) {
+    for (i = 0; i < config.delivery; i++) {
         /* create swork workers */
         serworkers[i].pfd = pfd[0]; /* read end */
         if (pthread_create(&(serworkers[i].thread), NULL, serworker_loop, serworkers + i)) {
@@ -126,6 +137,15 @@ int main(int argc, char **argv) {
             exit(-__LINE__);
         }
     }
+
+    /* catch signals */
+    memset(&action, 0, sizeof(struct sigaction));
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_NODEFER;
+    action.sa_handler = cleanup;
+    sigaction(SIGTERM, &action, NULL);
+    sigaction(SIGINT, &action, NULL);
+    sigaction(SIGHUP, &action, NULL);
 
     /* loop forever! */
     while (running) {
@@ -166,5 +186,110 @@ int main(int argc, char **argv) {
         }
     }
 
+    /* cleanup */
+    logger_log(ERR, "%s quitting!", MAILVER);
+
+    for (int i = 0; i < config.network; i++) {
+        pthread_kill(networkers[i].thread, SIGTERM);
+        pthread_join(networkers[i].thread, NULL);
+    }
+    free(networkers);
+
+    for (int i = 0; i < config.delivery; i++) {
+        pthread_kill(serworkers[i].thread, SIGTERM);
+        pthread_join(serworkers[i].thread, NULL);
+    }
+    free(serworkers);
+
+    net_deinit_ssl();
+
+    free(config.host);
+    free(config.domains);
+    free(config.modules);
+
     return 0;
+}
+
+/* configuration parser */
+static int server_conf(void *c, const char *s, const char *k, const char *v) {
+    struct barid_conf *sconf = (struct barid_conf *)c;
+    char extra[23];
+
+    if (!strcmp(s, "general")) {
+        if (!strcmp(k, "host") && !sconf->host) sconf->host = strdup(v);
+        else if (!strcmp(k, "domains") && !sconf->domains) sconf->domains = (char **)strdup(v);
+    } else if (!strcmp(s, "workers")) {
+        if (!strcmp(k, "network")) {
+            sconf->network = atoi(v);
+            if (sconf->network <= 0 || sconf->network > 128) {
+                sconf->network = 2;
+                logger_log(WARN, "Invalid number of network workers, using default %d", sconf->network);
+            }
+        } else if (!strcmp(k, "delivery")) {
+            sconf->delivery = atoi(v);
+            if (sconf->delivery <= 0 || sconf->delivery > 128) {
+                sconf->delivery = 2;
+                logger_log(WARN, "Invalid number of delivery workers, using default %d", sconf->delivery);
+            }
+        }
+    } else if (!strcmp(s, "network")) {
+        if (!strcmp(k, "bind")) {
+            /* check if this is ipv4 formatted */
+            extra[22] = strlen(v);
+            extra[2] = 0;
+            for (*extra = 0; *extra < extra[22]; (*extra)++) {
+                if (v[(int)*extra] == '.') { extra[2]++; }
+                if (v[(int)*extra] == ':') { extra[2]++; }
+            }
+
+            /* ipv4 addresses would have exactly 3 dots */
+            if (extra[22] < 16 && extra[2] == 3) {
+                /* prefix ::ffff: */
+                extra[0] = ':'; extra[1] = ':'; extra[2] = 'f'; extra[3] = 'f';
+                extra[4] = 'f'; extra[5] = 'f'; extra[6] = ':';
+
+                /* to the ipv4 address (include null) */
+                memcpy(extra+7, v, extra[22]+1);
+
+                /* then convert */
+                if (inet_pton(AF_INET6, extra, &(sconf->bind.sin6_addr)) <= 0) {
+                    sconf->bind.sin6_addr = in6addr_any;
+                    logger_log(WARN, "Invalid bind address %s, using default ANY", extra);
+                }
+            } else if (inet_pton(AF_INET6, v, &(sconf->bind.sin6_addr)) <= 0) {
+                sconf->bind.sin6_addr = in6addr_any;
+                logger_log(WARN, "Invalid bind address, using default ANY");
+            }
+        } else if (!strcmp(k, "port")) {
+            sconf->bind.sin6_port = atoi(v);
+            if (sconf->bind.sin6_port < 1 || sconf->bind.sin6_port > 65535) {
+                sconf->bind.sin6_port = 2525;
+                logger_log(WARN, "Invalid port, using default %d", sconf->bind.sin6_port);
+            }
+            sconf->bind.sin6_port = htons(sconf->bind.sin6_port);
+        }
+    } else if (!strcmp(s, "ssl")) {
+        if (!strcmp(k, "key") && !sconf->ssl_key) {
+            sconf->ssl_key = strdup(v);
+        } else if (!strcmp(k, "cert") && !sconf->ssl_cert) {
+            sconf->ssl_cert = strdup(v);
+        }
+
+        /* configure SSL if both key and cert specified */
+        if (sconf->ssl_key && sconf->ssl_cert) {
+            if (net_init_ssl(sconf->ssl_cert, sconf->ssl_key)) {
+                logger_log(WARN, "SSL disabled due to configuration error");
+            } else {
+                sconf->ssl_enabled = 1;
+            }
+            free(sconf->ssl_key);
+            free(sconf->ssl_cert);
+            sconf->ssl_key = NULL;
+            sconf->ssl_cert = NULL;
+        }
+    } else if (!strcmp(s, "delivery")) {
+        if (!strcmp(k, "modules") && !sconf->modules) sconf->modules = strdup(v);
+    }
+
+    return 1;
 }
