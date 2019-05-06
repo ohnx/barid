@@ -71,7 +71,7 @@ start:
     if (client->state == S_SSL_HS) {
         /* in the middle of an SSL handshake */
         printf("RESUMING SSL HANDSHAKE\n");
-        if (!net_sssl(client)) goto client_cleanup;
+        if (net_sssl(client)) goto client_cleanup;
         else goto next_evt;
     }
 

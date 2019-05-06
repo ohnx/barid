@@ -88,8 +88,8 @@ hs_step:
         /* handshake not done but will need more time */
         break;
     default:
-        mbedtls_strerror(r, err_buf, sizeof(err_buf));
-        printf("HANDSHAKE ERROR: %s\n", r);
+        mbedtls_strerror(ret, err_buf, sizeof(err_buf));
+        printf("HANDSHAKE ERROR: %s\n", err_buf);
         /* some sort of error here */
         return -4;
     }
