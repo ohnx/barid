@@ -15,8 +15,8 @@ size_t greeting_8250_len;
 
 int smtp_gendynamic(struct barid_conf *sconf) {
     /* first, 220 */
-    /* 7 chars in `220  \r\n`, plus 1 for null = 8 */
-    greeting_220_len = 8 + strlen(sconf->host) + sizeof(MAILVER);
+    /* 7 chars in `220  \r\n` [sizeof(MAILVER) has null already] */
+    greeting_220_len = 7 + strlen(sconf->host) + sizeof(MAILVER);
 
     /* allocate memory */
     greeting_220 = calloc(greeting_220_len, sizeof(char));
