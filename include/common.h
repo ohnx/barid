@@ -107,7 +107,7 @@ struct mail {
 };
 
 /* version string */
-#define MAILVER "barid v1.0.0a"
+#define MAILVER "barid v1.0.1b"
 
 /* running flag */
 extern sig_atomic_t running;

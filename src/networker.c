@@ -71,6 +71,7 @@ start:
         else goto next_evt;
     }
 
+rx_again:
     /* now we know we can read data safely */
     rcn = net_rx(client);
 
@@ -293,15 +294,25 @@ parsing_done:
             smtp_handlecode(client, 500);
 
             client->bio = 0;
-            goto next_evt;
         }
         /* no newlines here, but there's still room, so just read more. */
     } else {
         /* subtract how much we have consumed */
         client->bio -= (lns - client->buf);
+
         /* shift over the unused memory */
         memmove(client->buf, lns, client->bio);
     }
+
+    /*
+     * so... mbed tls has its own internal buffers, and these are separate from
+     * the system buffers. there may be new data on mbed tls' buffers, but none
+     * on the system buffers. since epoll checks system buffers, it is possible
+     * for mbed tls' buffers to never be consumed further. in order to fix this,
+     * if ssl is being used, we need to call mbedtls_ssl_read() until we get
+     * no more data left.
+     */
+    if (client->ssl) goto rx_again;
 
 next_evt:
     /* resume listening for data from this client on the socket */
