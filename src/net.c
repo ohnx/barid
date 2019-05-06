@@ -10,6 +10,7 @@
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/certs.h"
 #include "mbedtls/x509.h"
+#include "mbedtls/error.h"
 /* struct client, global vars */
 #include "common.h"
 /* function defs and stuff */
@@ -42,8 +43,8 @@ int net_tx(struct client *client, unsigned char *buf, size_t bufsz) {
 /* initiate SSL handshake */
 int net_sssl(struct client *client) {
     int ret;
-    /* TODO: fix check for if SSL is enabled or not */
-    if (!client) return -1;
+
+    if (!ssl_init || !client) return -1;
 
     if (client->ssl) {
         if (client->state == S_SSL_HS) goto hs_step;
@@ -93,11 +94,14 @@ int net_close(struct client *client) {
         return close(client->cfd);
     mbedtls_ssl_close_notify(client->ssl);
     mbedtls_ssl_free(client->ssl);
+    /* TODO: is this right?? */
+    free(client->ssl);
     return 0;
 }
 
 int net_init_ssl(const char *ssl_cert, const char *ssl_key) {
     int r;
+    char err_buf[256];
 
     /* initialize all the variables */
     mbedtls_x509_crt_init(&srvcert);
@@ -109,19 +113,22 @@ int net_init_ssl(const char *ssl_cert, const char *ssl_key) {
     /* parse the certificates */
     r = mbedtls_x509_crt_parse_file(&srvcert, ssl_cert);
     if (r) {
-        logger_log(ERR, "Failed to parse a certificate!"); return r;
+        mbedtls_strerror(r, err_buf, sizeof(err_buf));
+        logger_log(ERR, "Failed to parse certificate file `%s`: %s", ssl_cert, err_buf); return r;
     }
 
     /* parse the private key */
     r = mbedtls_pk_parse_keyfile(&pkey, ssl_key, NULL);
     if (r) {
-        logger_log(ERR, "Failed to parse private key!"); return r;
+        mbedtls_strerror(r, err_buf, sizeof(err_buf));
+        logger_log(ERR, "Failed to parse private key file `%s`: %s", ssl_key, err_buf); return r;
     }
 
     /* seed the RNG */
     r = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char *)MAILVER, sizeof(MAILVER));
     if (r) {
-        logger_log(ERR, "Failed to seed random number generator!"); return r;
+        mbedtls_strerror(r, err_buf, sizeof(err_buf));
+        logger_log(ERR, "Failed to seed random number generator: %s", err_buf); return r;
     }
 
     /* set up SSL configuration */
@@ -130,7 +137,8 @@ int net_init_ssl(const char *ssl_cert, const char *ssl_key) {
                     MBEDTLS_SSL_TRANSPORT_STREAM,
                     MBEDTLS_SSL_PRESET_DEFAULT);
     if (r) {
-        logger_log(ERR, "Failed to configure SSL!"); return r;
+        mbedtls_strerror(r, err_buf, sizeof(err_buf));
+        logger_log(ERR, "Failed to configure SSL: %s", err_buf); return r;
     }
 
     /* set up rng to use the entropy source ctr_drbg */
@@ -139,7 +147,8 @@ int net_init_ssl(const char *ssl_cert, const char *ssl_key) {
     /* configure own certificate */
     r = mbedtls_ssl_conf_own_cert(&ssl_conf, &srvcert, &pkey);
     if (r) {
-        logger_log(ERR, "Failed to set own certificate!"); return r;
+        mbedtls_strerror(r, err_buf, sizeof(err_buf));
+        logger_log(ERR, "Failed to set own certificate: %s", err_buf); return r;
     }
 
     ssl_init = 1;

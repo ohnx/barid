@@ -24,7 +24,7 @@
 struct barid_conf {
     /* general */
     char *host;
-    char **domains;
+    char *domains;
 
     /* workers */
     int network, delivery;
@@ -67,15 +67,20 @@ struct client {
     int cfd;
     /* the state of the client */
     enum state state;
+
+    /* the mail struct assigned to the client */
+    struct mail *mail;
+
     /* SSL context */
     mbedtls_ssl_context *ssl;
+
     /* how many bytes of the input buffer have already been used */
     unsigned int bio;
     /* input buffer */
     unsigned char buf[LARGEBUF];
 };
 
-/* this struct holds internal info */
+/* this struct holds internal info for mails */
 struct mail_internal_info {
     int to_total_len;
     int data_total_len;
@@ -98,7 +103,7 @@ struct mail {
     int data_c;
     char *data_v;
     /* extra information (a null `extra` indicates this email is READONLY) */
-    struct mail_internal_info *extra;
+    struct mail_internal_info extra;
 };
 
 /* version string */

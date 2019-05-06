@@ -32,183 +32,13 @@
 #include "networker.h"
 /* struct serworker */
 #include "serworker.h"
+/* smtp_gendynamic(), smtp_freedynamic() */
+#include "smtp.h"
+/* mail_set_allowed() */
+#include "mail.h"
 
 /* global variables */
 sig_atomic_t running = 1;
-
-/* configuration parser (see below) */
-static int server_conf(void *conf, const char *section, const char *key, const char *value);
-
-/* signal handler */
-void cleanup(int signum) {
-    if (signum != SIGHUP) running = 0;
-}
-
-/* main function */
-int main(int argc, char **argv) {
-    int sfd, efd, pfd[2], cfd, i, flg;
-    struct barid_conf config = {0};
-    struct networker *networkers;
-    struct serworker *serworkers;
-    struct epoll_event epint = {0};
-    struct sigaction action;
-
-    /* load configuration */
-    config.bind.sin6_family = AF_INET6;
-    if (ini_parse(argc == 2 ? argv[1] : "barid.ini", server_conf, &config) < 0) {
-        logger_log(ERR, "Could not load configuration file %s", argc == 2 ? argv[1] : "barid.ini");
-        return -__LINE__;
-    }
-
-    /* hi, world! */
-    logger_log(INFO, "%s starting!", MAILVER);
-
-    /* start by creating a socket */
-    if ((sfd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
-        logger_log(ERR, "Could not create a socket!");
-        return -__LINE__;
-    }
-
-    /* be nice.. set SO_REUSEADDR */
-    flg = 1;
-    if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (int *)&flg, sizeof(flg)) < 0) {
-        logger_log(WARN, "Could not set SO_REUSEADDR on socket!");
-    }
-
-    /* bind port */
-    if (bind(sfd, (struct sockaddr *)&(config.bind), sizeof(config.bind)) < 0) {
-        logger_log(ERR, "Could not bind to the port %d!", ntohs(config.bind.sin6_port));
-        return -__LINE__;
-    }
-
-    /* listen and check for failures */
-    if (listen(sfd, 1024) < 0) {
-        logger_log(ERR, "Could not begin listening for network connections!");
-        return -__LINE__;
-    }
-
-    /* set up epoll */
-    if ((efd = epoll_create(32)) < 0) {
-        logger_log(ERR, "Could not set up epoll!");
-        return -__LINE__;
-    }
-    /* initially we only care about when the socket is ready to write to */
-    epint.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
-
-    /* set up pipe for serialization consumption */
-    if (pipe(pfd) < 0) {
-        logger_log(ERR, "Could not initialize pipe for workers!");
-        return -__LINE__;
-    }
-
-    /* set up worker threads' handles */
-    networkers = calloc(sizeof(*networkers), config.network);
-    if (!networkers) {
-        logger_log(ERR, "System OOM");
-        return -__LINE__;
-    }
-
-    /* set up networkers */
-    for (i = 0; i < config.network; i++) {
-        /* set relevant variables */
-        networkers[i].efd = efd;
-        networkers[i].pfd = pfd[1]; /* write end */
-
-        /* create nwork workers */
-        if (pthread_create(&(networkers[i].thread), NULL, networker_loop, networkers + i)) {
-            logger_log(ERR, "Failed to create worker thread");
-            exit(-__LINE__);
-        }
-    }
-
-    /* set up worker threads' handles */
-    serworkers = calloc(sizeof(*serworkers), config.delivery);
-    if (!serworkers) {
-        logger_log(ERR, "System OOM");
-        return -__LINE__;
-    }
-
-    /* set up serializing workers */
-    for (i = 0; i < config.delivery; i++) {
-        /* create swork workers */
-        serworkers[i].pfd = pfd[0]; /* read end */
-        if (pthread_create(&(serworkers[i].thread), NULL, serworker_loop, serworkers + i)) {
-            logger_log(ERR, "Failed to create worker thread");
-            exit(-__LINE__);
-        }
-    }
-
-    /* catch signals */
-    memset(&action, 0, sizeof(struct sigaction));
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = SA_NODEFER;
-    action.sa_handler = cleanup;
-    sigaction(SIGTERM, &action, NULL);
-    sigaction(SIGINT, &action, NULL);
-    sigaction(SIGHUP, &action, NULL);
-
-    /* loop forever! */
-    while (running) {
-        /* accept a connection */
-        if ((cfd = accept(sfd, NULL, NULL)) < 0) {
-            logger_log(ERR, "Failed to accept a connection!");
-            break;
-        }
-
-        /* set this socket non-blocking */
-        if ((flg = fcntl(cfd, F_GETFL, 0)) < 0) {
-            logger_log(WARN, "Failed to set incoming socket nonblocking!");
-            close(cfd);
-            continue;
-        }
-        if (fcntl(cfd, F_SETFL, flg | O_NONBLOCK)) {
-            logger_log(WARN, "Failed to set incoming socket nonblocking!");
-            close(cfd);
-            continue;
-        }
-
-        /* allocate memory for the client */
-        if (!(epint.data.ptr = malloc(sizeof(struct client)))) {
-            logger_log(WARN, "Server out of memory when accepting client!");
-            close(cfd);
-            continue;
-        }
-        ((struct client *)(epint.data.ptr))->cfd = cfd;
-        ((struct client *)(epint.data.ptr))->state = S_BRANDNEW;
-        ((struct client *)(epint.data.ptr))->bio = 0;
-
-        /* add it to the epoll interest list */
-        if (epoll_ctl(efd, EPOLL_CTL_ADD, cfd, &epint) < 0) {
-            logger_log(WARN, "Failed to initialize incoming connection!");
-            free(epint.data.ptr);
-            close(cfd);
-            continue;
-        }
-    }
-
-    /* cleanup */
-    logger_log(ERR, "%s quitting!", MAILVER);
-
-    for (int i = 0; i < config.network; i++) {
-        pthread_kill(networkers[i].thread, SIGTERM);
-        pthread_join(networkers[i].thread, NULL);
-    }
-    free(networkers);
-
-    for (int i = 0; i < config.delivery; i++) {
-        pthread_kill(serworkers[i].thread, SIGTERM);
-        pthread_join(serworkers[i].thread, NULL);
-    }
-    free(serworkers);
-
-    net_deinit_ssl();
-
-    free(config.host);
-    free(config.domains);
-    free(config.modules);
-
-    return 0;
-}
 
 /* configuration parser */
 static int server_conf(void *c, const char *s, const char *k, const char *v) {
@@ -217,7 +47,7 @@ static int server_conf(void *c, const char *s, const char *k, const char *v) {
 
     if (!strcmp(s, "general")) {
         if (!strcmp(k, "host") && !sconf->host) sconf->host = strdup(v);
-        else if (!strcmp(k, "domains") && !sconf->domains) sconf->domains = (char **)strdup(v);
+        else if (!strcmp(k, "domains") && !sconf->domains) sconf->domains = strdup(v);
     } else if (!strcmp(s, "workers")) {
         if (!strcmp(k, "network")) {
             sconf->network = atoi(v);
@@ -292,4 +122,185 @@ static int server_conf(void *c, const char *s, const char *k, const char *v) {
     }
 
     return 1;
+}
+
+/* signal handler */
+void cleanup(int signum) {
+    if (signum != SIGHUP) running = 0;
+}
+
+/* main function */
+int main(int argc, char **argv) {
+    int sfd, efd, pfd[2], cfd, i, flg;
+    struct barid_conf config = {0};
+    struct networker *networkers;
+    struct serworker *serworkers;
+    struct epoll_event epint = {0};
+    struct sigaction action;
+
+    /* load configuration */
+    config.bind.sin6_family = AF_INET6;
+    if (ini_parse(argc == 2 ? argv[1] : "barid.ini", server_conf, &config) < 0) {
+        logger_log(ERR, "Could not load configuration file %s", argc == 2 ? argv[1] : "barid.ini");
+        return -__LINE__;
+    }
+
+    /* setup the smtp greetings and stuff */
+    smtp_gendynamic(&config);
+
+    /* setup the allowed email addresses */
+    mail_set_allowed(&config);
+
+    /* hi, world! */
+    logger_log(INFO, "%s starting!", MAILVER);
+
+    /* start by creating a socket */
+    if ((sfd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
+        logger_log(ERR, "Could not create a socket!");
+        return -__LINE__;
+    }
+
+    /* be nice.. set SO_REUSEADDR */
+    flg = 1;
+    if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (int *)&flg, sizeof(flg)) < 0) {
+        logger_log(WARN, "Could not set SO_REUSEADDR on socket!");
+    }
+
+    /* bind port */
+    if (bind(sfd, (struct sockaddr *)&(config.bind), sizeof(config.bind)) < 0) {
+        logger_log(ERR, "Could not bind to the port %d!", ntohs(config.bind.sin6_port));
+        return -__LINE__;
+    }
+
+    /* listen and check for failures */
+    if (listen(sfd, 1024) < 0) {
+        logger_log(ERR, "Could not begin listening for network connections!");
+        return -__LINE__;
+    }
+
+    /* set up epoll */
+    if ((efd = epoll_create(32)) < 0) {
+        logger_log(ERR, "Could not set up epoll!");
+        return -__LINE__;
+    }
+    /* initially we only care about when the socket is ready to write to */
+    epint.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
+
+    /* set up pipe for serialization consumption */
+    if (pipe(pfd) < 0) {
+        logger_log(ERR, "Could not initialize pipe for workers!");
+        return -__LINE__;
+    }
+
+    /* set up worker threads' handles */
+    networkers = calloc(sizeof(*networkers), config.network);
+    if (!networkers) {
+        logger_log(ERR, "System OOM");
+        return -__LINE__;
+    }
+
+    /* set up networkers */
+    for (i = 0; i < config.network; i++) {
+        /* set relevant variables */
+        networkers[i].efd = efd;
+        networkers[i].pfd = pfd[1]; /* write end */
+        networkers[i].sconf = &config; /* TODO: is it weird to pass a local stack variable to a different thread? */
+
+        /* create nwork workers */
+        if (pthread_create(&(networkers[i].thread), NULL, networker_loop, networkers + i)) {
+            logger_log(ERR, "Failed to create worker thread");
+            exit(-__LINE__);
+        }
+    }
+
+    /* set up worker threads' handles */
+    serworkers = calloc(sizeof(*serworkers), config.delivery);
+    if (!serworkers) {
+        logger_log(ERR, "System OOM");
+        return -__LINE__;
+    }
+
+    /* set up serializing workers */
+    for (i = 0; i < config.delivery; i++) {
+        /* create swork workers */
+        serworkers[i].pfd = pfd[0]; /* read end */
+        if (pthread_create(&(serworkers[i].thread), NULL, serworker_loop, serworkers + i)) {
+            logger_log(ERR, "Failed to create worker thread");
+            exit(-__LINE__);
+        }
+    }
+
+    /* catch signals */
+    memset(&action, 0, sizeof(struct sigaction));
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_NODEFER;
+    action.sa_handler = cleanup;
+    sigaction(SIGTERM, &action, NULL);
+    sigaction(SIGINT, &action, NULL);
+    sigaction(SIGHUP, &action, NULL);
+
+    /* loop forever! */
+    while (running) {
+        /* accept a connection */
+        if ((cfd = accept(sfd, NULL, NULL)) < 0) {
+            logger_log(ERR, "Failed to accept a connection!");
+            break;
+        }
+
+        /* set this socket non-blocking */
+        if ((flg = fcntl(cfd, F_GETFL, 0)) < 0) {
+            logger_log(WARN, "Failed to set incoming socket nonblocking!");
+            close(cfd);
+            continue;
+        }
+        if (fcntl(cfd, F_SETFL, flg | O_NONBLOCK)) {
+            logger_log(WARN, "Failed to set incoming socket nonblocking!");
+            close(cfd);
+            continue;
+        }
+
+        /* allocate memory for the client */
+        if (!(epint.data.ptr = malloc(sizeof(struct client)))) {
+            logger_log(WARN, "Server out of memory when accepting client!");
+            close(cfd);
+            continue;
+        }
+        ((struct client *)(epint.data.ptr))->cfd = cfd;
+        ((struct client *)(epint.data.ptr))->state = S_BRANDNEW;
+        ((struct client *)(epint.data.ptr))->bio = 0;
+        ((struct client *)(epint.data.ptr))->ssl = NULL;
+        ((struct client *)(epint.data.ptr))->mail = NULL;
+
+        /* add it to the epoll interest list */
+        if (epoll_ctl(efd, EPOLL_CTL_ADD, cfd, &epint) < 0) {
+            logger_log(WARN, "Failed to initialize incoming connection!");
+            free(epint.data.ptr);
+            close(cfd);
+            continue;
+        }
+    }
+
+    /* cleanup */
+    logger_log(ERR, "%s quitting!", MAILVER);
+
+    for (int i = 0; i < config.network; i++) {
+        pthread_kill(networkers[i].thread, SIGTERM);
+        pthread_join(networkers[i].thread, NULL);
+    }
+    free(networkers);
+
+    for (int i = 0; i < config.delivery; i++) {
+        pthread_kill(serworkers[i].thread, SIGTERM);
+        pthread_join(serworkers[i].thread, NULL);
+    }
+    free(serworkers);
+
+    net_deinit_ssl();
+    smtp_freedynamic();
+
+    free(config.host);
+    free(config.domains);
+    free(config.modules);
+
+    return 0;
 }

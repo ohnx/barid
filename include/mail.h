@@ -1,19 +1,6 @@
 #ifndef __MAIL_H_INC
 #define __MAIL_H_INC
 
-#include "server.h"
-#include "common.h"
-#include <stdio.h>
-#include <time.h>
-#include <stdlib.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <pwd.h>
-#include <grp.h>
-#include <sys/socket.h>
-
 #define MAIL_ERROR_NONE         0
 #define MAIL_ERROR_PARSE        1
 #define MAIL_ERROR_INVALIDEMAIL 2
@@ -40,8 +27,8 @@ enum mail_sf {
     BOTH = 5
 };
 
-struct mail *mail_new_internal(int hasExtra);
-#define mail_new()  mail_new_internal(1)
+void mail_set_allowed(struct barid_conf *conf);
+struct mail *mail_new();
 int mail_reset(struct mail *email);
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data);

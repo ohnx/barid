@@ -15,6 +15,8 @@
 #include "networker.h"
 /* serworker_deliver() */
 #include "serworker.h"
+/* mail family functions */
+#include "mail.h"
 /* smtp_handlecode() */
 #include "smtp.h"
 /* net family functions */
@@ -22,10 +24,15 @@
 /* logger_log() */
 #include "logger.h"
 
+#define xstr(s) str(s)
+#define str(s) #s
+
 void *networker_loop(void *z) {
     struct networker *self = (struct networker *)z;
     struct epoll_event epevnt;
     struct client *client;
+    /* TODO: remove need for tmp pointer by adding instantiator for mail to require remote server address */
+    void *tmp;
 
     int rcn, ll, i, lc;
     unsigned char *lns, *lptr;
@@ -104,17 +111,30 @@ next_line:
     /* this line starts at lns and ends at lptr */
     ll = lptr - lns;
 
+    /* we don't really want the newlines here */
+    *lptr = '\0';
+
     /* Check if we are in data mode */
     if (client->state == S_END_DATA) {
-        if (*lns == '.' && lns[1] == '\r') {
-            /* TODO: deliver the mail by writing the pointer to pfd */
-            serworker_deliver(self->pfd, NULL);
+        /* change \0\n to \n\0 for data appending purposes */
+        *lptr = '\n';
+        *(lptr + 1) = '\0';
+
+        if (*lns == '.' && lns[1] == '\n') {
+            serworker_deliver(self->pfd, client->mail);
+            tmp = mail_new();
+            mail_setattr((struct mail *)tmp, FROMS, client->mail->froms_v);
+            client->mail = (struct mail *)tmp;
             client->state = S_MAIL;
             lc = 250;
             goto line_handle_code;
         }
 
-        /* TODO: append data to mail */
+        i = mail_appenddata(client->mail, (char *)(lns));
+        switch (i) {
+        case MAIL_ERROR_DATAMAX: smtp_handlecode(client, 522);
+        case MAIL_ERROR_OOM: smtp_handlecode(client, 451);
+        }
         goto next_line;
     }
 
@@ -125,7 +145,7 @@ next_line:
         }
     }
 
-    /* this is slightly faster than strcmp'ing each verb */
+    /* this is slightly faster than strcmp'ing each verb, i think */
     lverb = V_UNKN;
     switch (*lns) {
     case 'D': if (!strncmp((char *)lns, "DATA", 4)) lverb = V_DATA; break;
@@ -148,15 +168,46 @@ next_line:
     case V_UNKN: lc = 502; break; /* 502 command unknown */
     case V_QUIT: lc = 221; break;
     case V_RSET:
-        /* TODO: clear mail flags */
+        /* reset the mail */
+        if (client->mail) {
+            mail_reset(client->mail);
+            client->state = S_MAIL;
+        } else {
+            client->state = S_HELO;
+        }
+
         lc = 250;
         break;
     case V_EHLO:
-        lc = 8250; /* 8250 is a custom code for EHLO response */
     case V_HELO:
         if (client->state != S_HELO) { lc = 503; break; } /* 503 wrong sequence */
-        /* TODO: store the sending server */
-        client->state = S_MAIL;
+        if (ll < 6) {
+            /* line too short - no way to have a server name here */
+            lc = 501;
+            break;
+        }
+
+        /* initialize the mail struct */
+        client->mail = mail_new();
+        if (!(client->mail)) {
+            logger_log(WARN, "Server out of memory!");
+            goto client_cleanup;
+        }
+
+        /* store the server in the mail struct */
+        i = mail_setattr(client->mail, FROMS, (char *)(lns + 5)); /* +5 skips EHLO */
+        switch (i) {
+        case MAIL_ERROR_PARSE: lc = 501; break;
+        case MAIL_ERROR_OOM: lc = 451; break;
+        case MAIL_ERROR_NONE:
+            if (lverb == V_EHLO) lc = 8250; /* 8250 is a custom code for EHLO response */
+            else lc = 250;
+
+            /* update state */
+            client->state = S_MAIL;
+            break;
+        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) "" MAILVER); goto end;
+        }
         break;
     case V_STLS:
         if (!(self->sconf->ssl_enabled)) { lc = 502; break; } /* 502 command unknown */
@@ -173,10 +224,17 @@ next_line:
         for (i = 10; i < ll; i++)
             if (lns[i] != ' ') break;
 
-        /* TODO: store FROM */
-
-        /* update state */
-        client->state = S_RCPT;
+        /* store the address from in the mail struct */
+        i = mail_setattr(client->mail, FROM, (char *)(lns + i));
+        switch (i) {
+        case MAIL_ERROR_PARSE: lc = 501; break;
+        case MAIL_ERROR_OOM: lc = 451; break;
+        case MAIL_ERROR_NONE:
+            lc = 250;
+            /* update state */
+            client->state = S_RCPT; break;
+        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) "" MAILVER); goto end;
+        }
         break;
     case V_RCPT:
         if (client->state != S_RCPT && client->state != S_DATA)
@@ -189,10 +247,20 @@ next_line:
         for (i = 8; i < ll; i++)
             if (lns[i] != ' ') break;
 
-        /* TODO: store TO */
-
-        /* update state */
-        client->state = S_DATA;
+        /* add another mail recipient */
+        i = mail_addattr(client->mail, TO, (char *)(lns + i));
+        switch (i) {
+        case MAIL_ERROR_PARSE: lc = 501; break;
+        case MAIL_ERROR_OOM: lc = 451; break;
+        case MAIL_ERROR_INVALIDEMAIL: lc = 450; break;
+        case MAIL_ERROR_RCPTMAX: lc = 452; break;
+        case MAIL_ERROR_USRNOTLOCAL: lc = 550; break;
+        case MAIL_ERROR_NONE:
+            lc = 250;
+            /* update state */
+            client->state = S_DATA; break;
+        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) "" MAILVER); goto end;
+        }
         break;
     case V_DATA:
         if (client->state != S_DATA) { lc = 503; break; } /* 503 wrong sequence */
@@ -220,8 +288,10 @@ parsing_done:
     if (lns == client->buf) {
         if (client->bio + 1 >= LARGEBUF) {
             /* no newlines found and the data is at max length; this line is too long */
-            /* TODO: send 500 */
-            goto client_cleanup; /* TODO: quit or reset connection? */
+            smtp_handlecode(client, 500);
+
+            client->bio = 0;
+            goto next_evt;
         }
         /* no newlines here, but there's still room, so just read more. */
     } else {
@@ -249,6 +319,7 @@ client_cleanup:
     /* clean up client data */
     logger_log(INFO, "Client %d disconnected!", client->cfd);
     net_close(client);
+    if (client->mail) mail_destroy(client->mail);
     free(client);
     goto start;
 }
