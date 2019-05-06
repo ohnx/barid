@@ -6,6 +6,9 @@
 /* strstr(), strncmp() */
 #include <string.h>
 
+/* DEBUG TODO */
+#include <stdio.h>
+
 /* mbedtls_ssl_free */
 #include "mbedtls/ssl.h"
 
@@ -67,6 +70,7 @@ start:
     /* for some states it is unsafe to perform a read right away */
     if (client->state == S_SSL_HS) {
         /* in the middle of an SSL handshake */
+        printf("RESUMING SSL HANDSHAKE\n");
         if (!net_sssl(client)) goto client_cleanup;
         else goto next_evt;
     }
@@ -87,6 +91,7 @@ start:
             /* no error, just need to read some more data */
             goto next_evt;
         default:
+            printf("DATA READ ERROR OCCURRED!\n");
             goto client_cleanup;
         }
     }

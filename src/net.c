@@ -18,6 +18,9 @@
 /* logger */
 #include "logger.h"
 
+/* TODO: debug */
+#include <stdio.h>
+
 static mbedtls_entropy_context entropy;
 static mbedtls_ctr_drbg_context ctr_drbg;
 static mbedtls_ssl_config ssl_conf;
@@ -43,6 +46,8 @@ int net_tx(struct client *client, unsigned char *buf, size_t bufsz) {
 /* initiate SSL handshake */
 int net_sssl(struct client *client) {
     int ret;
+    /* TODO: DEBUG */
+    char err_buf[256];
 
     if (!ssl_init || !client) return -1;
 
@@ -72,15 +77,19 @@ hs_step:
     switch (ret) {
     case 0:
         /* handshake done */
+        printf("HANDSHAKE COMPLETE\n");
         client->state = S_HELO;
         break;
     case MBEDTLS_ERR_SSL_WANT_READ:
     case MBEDTLS_ERR_SSL_WANT_WRITE:
     case MBEDTLS_ERR_SSL_ASYNC_IN_PROGRESS:
     case MBEDTLS_ERR_SSL_CRYPTO_IN_PROGRESS:
+        printf("HANDSHAKE NEEDS MORE TIME\n");
         /* handshake not done but will need more time */
         break;
     default:
+        mbedtls_strerror(r, err_buf, sizeof(err_buf));
+        printf("HANDSHAKE ERROR: %s\n", r);
         /* some sort of error here */
         return -4;
     }
