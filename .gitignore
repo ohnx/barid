@@ -3,3 +3,4 @@ objs/
 barid
 *.so
 *.a
+barid.ini

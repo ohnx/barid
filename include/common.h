@@ -36,9 +36,6 @@ struct barid_conf {
     char *ssl_key;
     char *ssl_cert;
     char ssl_enabled;
-
-    /* delivery */
-    char *modules;
 };
 
 #define BC_FLG_SSL_ENABLED 0x1

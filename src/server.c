@@ -131,8 +131,6 @@ static int server_conf(void *c, const char *s, const char *k, const char *v) {
             sconf->ssl_key = NULL;
             sconf->ssl_cert = NULL;
         }
-    } else if (!strcmp(s, "delivery")) {
-        if (!strcmp(k, "modules") && !sconf->modules) sconf->modules = strdup(v);
     }
 
     return 1;
@@ -340,7 +338,6 @@ int main(int argc, char **argv) {
 
     free(config.host);
     free(config.domains);
-    free(config.modules);
 
     return 0;
 }
