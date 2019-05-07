@@ -28,7 +28,7 @@ objs/%.o: src/%.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(EXTRA)
 
 $(OUTPUT): dist/libmbedtls.a dist/libinih.a $(OBJ)
-	$(CC) $^ -o $@ $(LIBS)
+	$(CC) $^ -o $@ $(LIBS) $(LDFLAGS)
 
 debug/hook_net.so: debug/hook_net.c
 	$(MAKE) -C debug/
@@ -37,10 +37,6 @@ debug/hook_net.so: debug/hook_net.c
 debug: $(OUTPUT)
 debug: CFLAGS+=-g -O0
 	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT) -p 2525 example.com example.org example.net -s
-
-.PHONY: gcov
-gcov: debug
-gxov: CFLAGS+=-fprofile-arcs -ftest-coverage
 
 .PHONY: clean
 clean:

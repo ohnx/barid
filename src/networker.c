@@ -235,6 +235,7 @@ next_line:
         }
         break;
     case V_STLS:
+        /* TODO: check memory leak if we overwrite server after STARTTLS - should be covered in mail, right? */
         if (!(self->sconf->ssl_enabled)) { lc = 502; break; } /* 502 command unknown */
         if (client->state != S_MAIL) { lc = 503; break; } /* 503 wrong sequence */
         lc = 8220; /* 8220 is a custom code for starting TLS handshake */
