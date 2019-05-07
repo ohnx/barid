@@ -31,8 +31,7 @@ void *networker_loop(void *z) {
     struct networker *self = (struct networker *)z;
     struct epoll_event epevnt;
     struct client *client;
-    /* TODO: remove need for tmp pointer by adding instantiator for mail to require remote server address */
-    void *tmp;
+    struct mail *email_tmp;
 
     int rcn, ll, i, lc;
     unsigned char *lns, *lptr;
@@ -49,7 +48,6 @@ start:
 
     if ((epevnt.events & EPOLLOUT) && client->state == S_BRANDNEW) {
         /* brand new connection */
-        logger_log(INFO, "Client %d connected!", client->cfd);
         smtp_handlecode(client, 220);
 
         /* update stage */
@@ -122,12 +120,22 @@ next_line:
         *(lptr + 1) = '\0';
 
         if (*lns == '.' && lns[1] == '\n') {
-            tmp = mail_new();
-            mail_setattr((struct mail *)tmp, FROMS, client->mail->froms_v);
+            /* create a new mail with the server info */
+            email_tmp = mail_new(client->mail->froms_v);
 
+            /* set using ssl or not */
+            if (client->ssl) mail_setattr(client->mail, SSL_USED, NULL);
+
+            /* set remote address */
+            mail_setattr(client->mail, REMOTE_ADDR, (const char *)&(client->cfd));
+
+            /* deliver this mail */
             serworker_deliver(self->pfd, client->mail);
 
-            client->mail = (struct mail *)tmp;
+            /* overwrite the old one */
+            client->mail = email_tmp;
+
+            /* start the process all over again! */
             client->state = S_MAIL;
             lc = 250;
             goto line_handle_code;
@@ -191,7 +199,7 @@ next_line:
         }
 
         /* initialize the mail struct */
-        client->mail = mail_new();
+        client->mail = mail_new(NULL);
         if (!(client->mail)) {
             logger_log(WARN, "Server out of memory!");
             goto client_cleanup;
@@ -330,7 +338,6 @@ end:
 
 client_cleanup:
     /* clean up client data */
-    logger_log(INFO, "Client %d disconnected!", client->cfd);
     net_close(client);
     if (client->mail) mail_destroy(client->mail);
     free(client);

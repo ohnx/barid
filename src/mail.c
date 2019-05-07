@@ -4,6 +4,8 @@
 #include <stdlib.h>
 /* memcpy(), etc. */
 #include <string.h>
+/* getpeername() */
+#include <sys/socket.h>
 
 /* struct mail, etc. */
 #include "common.h"
@@ -16,8 +18,9 @@ void mail_set_allowed(struct barid_conf *conf) {
     allowed_hosts = conf->domains;
 }
 
-struct mail *mail_new() {
+struct mail *mail_new(const char *froms) {
     struct mail *email;
+    int i;
 
     email = calloc(1, sizeof(struct mail));
     if (email == NULL) return NULL;
@@ -33,8 +36,24 @@ struct mail *mail_new() {
     email->extra.data_total_len = 256;
     email->data_v = calloc(email->extra.data_total_len, 1);
     if (email->data_v == NULL) {
+        free(email->to_v);
         free(email);
         return NULL;
+    }
+
+    /* from server */
+    if (froms) {
+        i = strlen(froms);
+        email->froms_c = i + 1;
+        email->froms_v = malloc(i + 1);
+        if (email->from_v == NULL) {
+            free(email->to_v);
+            free(email->data_v);
+            free(email);
+            return NULL;
+        }
+
+        memcpy(email->froms_v, froms, email->froms_c);
     }
 
     return email;
@@ -110,6 +129,14 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
         (email->extra).using_ssl = 1;
 
         return MAIL_ERROR_NONE;
+    case REMOTE_ADDR:
+        if (!data) return MAIL_ERROR_PROGRAM;
+        /* getpeername() fetches the peer's ip address */
+        t = sizeof(email->extra.origin_ip);
+        if (getpeername(*((int *)(data)), (struct sockaddr *)&(email->extra.origin_ip), (unsigned int *)&t) < 0)
+            return MAIL_ERROR_MISC;
+        else
+            return MAIL_ERROR_NONE;
     default:
         /* should be calling mail_addattr() */
         return MAIL_ERROR_PROGRAM;

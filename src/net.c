@@ -96,7 +96,7 @@ int net_close(struct client *client) {
         return close(client->cfd);
     mbedtls_ssl_close_notify(client->ssl);
     mbedtls_ssl_free(client->ssl);
-    /* TODO: is this right?? */
+
     free(client->ssl);
     return 0;
 }

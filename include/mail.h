@@ -9,13 +9,15 @@
 #define MAIL_ERROR_USRNOTLOCAL  4
 #define MAIL_ERROR_PROGRAM      8
 #define MAIL_ERROR_OOM          9
+#define MAIL_ERROR_MISC         10
 
 /* what attribute to write to */
 enum mail_attr {
     FROMS,
     FROM,
     TO,
-    SSL_USED
+    SSL_USED,
+    REMOTE_ADDR
 };
 
 /* serialize output format */
@@ -28,7 +30,7 @@ enum mail_sf {
 };
 
 void mail_set_allowed(struct barid_conf *conf);
-struct mail *mail_new();
+struct mail *mail_new(const char *froms);
 int mail_reset(struct mail *email);
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data);

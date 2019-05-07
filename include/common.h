@@ -85,7 +85,7 @@ struct mail_internal_info {
     int to_total_len;
     int data_total_len;
     unsigned char using_ssl;
-    struct sockaddr_storage *origin_ip;
+    struct sockaddr_storage origin_ip;
 };
 
 /* mail info that networker fills out and that serworker serializes */
