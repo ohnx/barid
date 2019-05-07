@@ -10,7 +10,7 @@ server; the intention is for barid to be run on a computer and receive mail
 from other Mail Transfer Agents (MTA's).
 
 barid is multi-threaded, can receive secured email using STARTTLS, and fully
-supports IPv6. barid can output to standard output or into an Mbox format. Through
-the use of modules, barid can deliver to any format you want!
+supports IPv6. barid stores received mails in the Mbox format, but other methods
+are planned for in the future(tm).
 
 Currently, there are no anti-spam features.

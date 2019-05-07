@@ -1,13 +1,10 @@
 #ifndef __NETWORKER_H_INC
 #define __NETWORKER_H_INC
 
-/* pthread_t */
-#include <pthread.h>
-
 /* struct barid_conf */
 #include "common.h"
 
-void *networker_loop(void *z);
+int networker_loop(void *z);
 
 /* verbs that this server supports */
 enum known_verbs {
@@ -25,8 +22,9 @@ enum known_verbs {
 
 /* handle for networkers */
 struct networker {
-    /* thread handle */
-    pthread_t thread;
+    /* thread handle and stack */
+    int pid;
+    void *stack;
 
     /* main barid config */
     struct barid_conf *sconf;

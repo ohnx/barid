@@ -6,6 +6,10 @@
 /* strstr(), strncmp() */
 #include <string.h>
 
+/* (both = setuid) */
+#include <sys/types.h>
+#include <unistd.h>
+
 /* mbedtls_ssl_free */
 #include "mbedtls/ssl.h"
 
@@ -27,7 +31,7 @@
 #define xstr(s) str(s)
 #define str(s) #s
 
-void *networker_loop(void *z) {
+int networker_loop(void *z) {
     struct networker *self = (struct networker *)z;
     struct epoll_event epevnt;
     struct client *client;
@@ -36,6 +40,9 @@ void *networker_loop(void *z) {
     int rcn, ll, i, lc;
     unsigned char *lns, *lptr;
     enum known_verbs lverb;
+
+    /* remove some of our permissions since we don't need them */
+    setuid(65534); /* 65534 = nobody */
 
 start:
     if (epoll_wait(self->efd, &epevnt, 1, -1) < 0) goto end;
@@ -147,6 +154,13 @@ next_line:
         case MAIL_ERROR_OOM: smtp_handlecode(client, 451);
         }
         goto next_line;
+    }
+
+    /* at this point we are expecting a verb */
+    if (ll < 4) {
+        /* if the line is only 4 characters there is no way to have a valid verb */
+        lc = 502;
+        goto line_handle_code;
     }
 
     /* convert verb to upper case if it's in lower case */
@@ -334,7 +348,8 @@ next_evt:
     else goto start;
 
 end:
-    return NULL;
+    printf("goodbye networker!\n");
+    return 0;
 
 client_cleanup:
     /* clean up client data */

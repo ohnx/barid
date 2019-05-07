@@ -13,12 +13,16 @@
 #include <unistd.h>
 /* fnctl() */
 #include <fcntl.h>
+/* errno */
+#include <errno.h>
 /* sig_atomic_t, struct sigaction, sigaction(), etc. */
 #include <signal.h>
 /* epoll-family functions */
 #include <sys/epoll.h>
-/* pthread-family functions */
-#include <pthread.h>
+/* clone() and associated flags */
+#include <sched.h>
+/* waitpid() */
+#include <sys/wait.h>
 /* ini_parse */
 #include <ini.h>
 
@@ -39,6 +43,16 @@
 
 /* global variables */
 sig_atomic_t running = 1;
+
+/* stack size for each child process */
+#define CHILD_STACKSIZE         65536
+
+/* flags to the clone call */
+/*
+ * CLONE_FILES to share file descriptors, CLONE_SYSVSEM because why not,
+ * CLONE_VM to share memory
+ */
+#define CLONE_FLAGS (CLONE_FILES | CLONE_SYSVSEM | CLONE_VM)
 
 /* configuration parser */
 static int server_conf(void *c, const char *s, const char *k, const char *v) {
@@ -125,7 +139,7 @@ static int server_conf(void *c, const char *s, const char *k, const char *v) {
 }
 
 /* signal handler */
-void cleanup(int signum) {
+static void cleanup(int signum) {
     if (signum != SIGHUP) running = 0;
 }
 
@@ -206,10 +220,21 @@ int main(int argc, char **argv) {
         networkers[i].pfd = pfd[1]; /* write end */
         networkers[i].sconf = &config; /* TODO: is it weird to pass a local stack variable to a different thread? */
 
-        /* create nwork workers */
-        if (pthread_create(&(networkers[i].thread), NULL, networker_loop, networkers + i)) {
+        /* allocate stack for child */
+        networkers[i].stack = malloc(CHILD_STACKSIZE);
+        if (!networkers[i].stack) {
             logger_log(ERR, "Failed to create worker thread");
-            exit(-__LINE__);
+            return -__LINE__;
+        }
+
+        /* create new process with shared memory and running the networker_loop */
+        networkers[i].pid = clone(networker_loop,
+                                    (unsigned char *)networkers[i].stack + CHILD_STACKSIZE,
+                                    CLONE_FLAGS,
+                                    networkers + i);
+        if (networkers[i].pid < 0) {
+            logger_log(ERR, "Failed to create worker thread: %s", strerror(errno));
+            return -__LINE__;
         }
     }
 
@@ -224,9 +249,22 @@ int main(int argc, char **argv) {
     for (i = 0; i < config.delivery; i++) {
         /* create swork workers */
         serworkers[i].pfd = pfd[0]; /* read end */
-        if (pthread_create(&(serworkers[i].thread), NULL, serworker_loop, serworkers + i)) {
+
+        /* allocate stack for child */
+        serworkers[i].stack = malloc(CHILD_STACKSIZE);
+        if (!serworkers[i].stack) {
             logger_log(ERR, "Failed to create worker thread");
-            exit(-__LINE__);
+            return -__LINE__;
+        }
+
+        /* create new process with shared memory and running the serworker_loop */
+        serworkers[i].pid = clone(serworker_loop,
+                                    (unsigned char *)serworkers[i].stack + CHILD_STACKSIZE,
+                                    CLONE_FLAGS,
+                                    serworkers + i);
+        if (serworkers[i].pid < 0) {
+            logger_log(ERR, "Failed to create worker thread: %s", strerror(errno));
+            return -__LINE__;
         }
     }
 
@@ -284,14 +322,16 @@ int main(int argc, char **argv) {
     logger_log(ERR, "%s quitting!", MAILVER);
 
     for (int i = 0; i < config.network; i++) {
-        pthread_kill(networkers[i].thread, SIGTERM);
-        pthread_join(networkers[i].thread, NULL);
+        /* before clearing the stacks, waitpid just in case */
+        waitpid(networkers[i].pid, NULL, 0);
+        free(networkers[i].stack);
     }
     free(networkers);
 
     for (int i = 0; i < config.delivery; i++) {
-        pthread_kill(serworkers[i].thread, SIGTERM);
-        pthread_join(serworkers[i].thread, NULL);
+        /* before clearing the stacks, waitpid just in case */
+        waitpid(serworkers[i].pid, NULL, 0);
+        free(serworkers[i].stack);
     }
     free(serworkers);
 

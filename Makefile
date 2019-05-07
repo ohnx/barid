@@ -1,6 +1,6 @@
 INCLUDES+=-Iinclude/ -Idist/mbedtls/include -Idist/inih
 LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih
-CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic
+CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic -D_DEFAULT_SOURCE -D_GNU_SOURCE
 
 OBJ=objs/server.o objs/logger.o objs/networker.o objs/serworker.o objs/net.o
 OBJ+=objs/smtp.o objs/mail.o

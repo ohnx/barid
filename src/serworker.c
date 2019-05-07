@@ -19,7 +19,7 @@ int serworker_deliver(int fd, struct mail *mail) {
     return sizeof(mail) - write(fd, &mail, sizeof(mail));
 }
 
-void *serworker_loop(void *z) {
+int serworker_loop(void *z) {
     struct serworker *self = (struct serworker *)z;
     struct mail *mail;
     unsigned int len;
@@ -55,5 +55,6 @@ next:
     else goto start;
 
 end:
-    return NULL;
+    printf("goodbye serworker!\n");
+    return 0;
 }
