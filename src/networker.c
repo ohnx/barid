@@ -214,7 +214,8 @@ next_line:
         }
 
         /* initialize the mail struct */
-        client->mail = mail_new(NULL);
+        if (client->mail) mail_reset(client->mail);
+        else client->mail = mail_new(NULL);
         if (!(client->mail)) {
             logger_log(WARN, "Server out of memory!");
             goto client_cleanup;
