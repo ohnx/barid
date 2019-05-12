@@ -6,6 +6,14 @@
 #include <string.h>
 /* getpeername() */
 #include <sys/socket.h>
+/* getpwnam() */
+#include <pwd.h>
+/* getgrnam() */
+#include <grp.h>
+/* chown() */
+#include <unistd.h>
+/* time(), etc. */
+#include <time.h>
 
 /* struct mail, etc. */
 #include "common.h"
@@ -46,7 +54,7 @@ struct mail *mail_new(const char *froms) {
         i = strlen(froms);
         email->froms_c = i + 1;
         email->froms_v = malloc(i + 1);
-        if (email->from_v == NULL) {
+        if (email->froms_v == NULL) {
             free(email->to_v);
             free(email->data_v);
             free(email);
@@ -85,7 +93,9 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
         if (data_len == 0) return MAIL_ERROR_PARSE;
 
         /* copy the data */
-        if (email->froms_v) free(email->froms_v);
+        if (email->froms_v) {
+            free(email->froms_v);
+        }
         email->froms_c = data_len + 1;
         email->froms_v = malloc(email->froms_c);
 
@@ -237,13 +247,13 @@ int mail_appenddata(struct mail *email, const char *data) {
     int data_len;
     char appB;
 
-    /* Replace .. with single . */
+    /* Replace .. with single . (specs in SMTP) */
     if (*data == '.') data++;
 
     /* get data length */
     data_len = strlen(data) + 1;
     
-    /* Need to add a '>' to 'From ' (there is corruption here, oops) */
+    /* Need to add a '>' to 'From ' */
     appB = !strncmp(data, "From ", 5);
     if (appB) data_len++;
 
@@ -267,7 +277,7 @@ int mail_appenddata(struct mail *email, const char *data) {
     if (!appB)
         memcpy(email->data_v + email->data_c, data, data_len);
     else {
-        /* Need to add a '>' to 'From ' (there is corruption here, oops) */
+        /* Need to add a '>' to 'From ' */
         memcpy(email->data_v + email->data_c + 1, data, data_len - 1);
         *(email->data_v + email->data_c) = '>';
     }
@@ -277,6 +287,103 @@ int mail_appenddata(struct mail *email, const char *data) {
 
     /* no error */
     return MAIL_ERROR_NONE;
+}
+
+static void ms_chmod(const char *out_name) {
+    uid_t          uid;
+    gid_t          gid;
+    struct passwd *pwd;
+    struct group  *grp;
+
+    /* get user id */
+    pwd = getpwnam(out_name);
+    if (pwd == NULL) {
+        return;
+    }
+    uid = pwd->pw_uid;
+
+    /* get group id */
+    grp = getgrnam(out_name);
+    if (grp == NULL) {
+        return;
+    }
+    gid = grp->gr_gid;
+
+    /* do the actual chown */
+    if (chown(out_name, uid, gid) == -1) {
+        return;
+    }
+}
+
+int mail_serialize_file(struct mail *email) {
+    char *at_loc, *fo, *fo_o, *from_fix, *cps;
+    char timebuf[26];
+    time_t timep;
+    int i;
+    FILE *fp;
+
+    /* get time as string */
+    time(&timep);
+    ctime_r(&timep, timebuf);
+
+    /* Replace ' ' with '-' in mbox format */
+    from_fix = strdup(email->from_v);
+    for (i = 0; i < email->from_c; i++)
+        if (from_fix[i] == ' ')
+            from_fix[i] = '-';
+
+    /* loop through all addresses to deliver to */
+    for (i = 0; i < email->to_c; i++) {
+        /* temporarily clear '@' to ignore domain */
+        at_loc = strchr(email->to_v + i, '@');
+        *at_loc = 0;
+
+        /* allocate memory for file output name */
+        fo = fo_o = strdup(email->to_v + i);
+
+        /* ignore all characters after last + sign */
+        cps = strchr(fo, '+');
+        if (cps) *cps = 0;
+
+        /* check for comments at start and skip past them */
+        if (*fo == '(' && (cps = strchr(fo, ')')) != NULL) fo = cps+1;
+
+        /* check for comments at end and null them out */
+        if (fo[strlen(fo)] == ')' && (cps = strchr(fo, '(')) != NULL) *cps = 0;
+
+        /* open the specified file */
+        fp = fopen(fo, "a");
+        if (fp == NULL) goto error;
+
+        /* get time (timebuf has \n already) */
+        if (fprintf(fp, "From %s %s", from_fix, timebuf) < 0) goto error;
+
+        /* print out data */
+        if (fprintf(fp, "%s\n", email->data_v) < 0) goto error;
+
+        /* close file + clean up */
+        if (fclose(fp) != 0) goto error;
+
+        /* chown the file */
+        ms_chmod(fo);
+
+        free(fo_o);
+        fo_o = NULL;
+
+        /* advance to next one */
+        *at_loc = '@';
+        i += strlen(email->to_v + i);
+        continue;
+
+    error:
+        /* failed to open file, return error */
+        free(fo_o);
+        free(from_fix);
+        return -1;
+    }
+
+    free(from_fix);
+    return 0;
 }
 
 void mail_destroy(struct mail *email) {

@@ -31,7 +31,13 @@
 #define xstr(s) str(s)
 #define str(s) #s
 
+#include <errno.h>
+
+#ifndef USE_PTHREADS
 int networker_loop(void *z) {
+#else
+void *networker_loop(void *z) {
+#endif
     struct networker *self = (struct networker *)z;
     struct epoll_event epevnt;
     struct client *client;
@@ -349,7 +355,7 @@ next_evt:
     else goto start;
 
 end:
-    printf("goodbye networker!\n");
+    logger_log(INFO, "Network thread terminating!");
     return 0;
 
 client_cleanup:

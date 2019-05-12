@@ -5,6 +5,10 @@
 #include <unistd.h>
 /* strlen() */
 #include <string.h>
+/* inet_ntop() */
+#include <arpa/inet.h>
+/* getnameinfo() */
+#include <netdb.h>
 
 /* running flag */
 #include "common.h"
@@ -19,33 +23,39 @@ int serworker_deliver(int fd, struct mail *mail) {
     return sizeof(mail) - write(fd, &mail, sizeof(mail));
 }
 
+#ifndef USE_PTHREADS
 int serworker_loop(void *z) {
+#else
+void *serworker_loop(void *z) {
+#endif
     struct serworker *self = (struct serworker *)z;
     struct mail *mail;
     unsigned int len;
-    int i;
+    char ip[46], hst[NI_MAXHOST];
 
 start:
     /* read in the pointer to the mail object to serialize */
     len = read(self->pfd, &mail, sizeof(mail));
 
-    if (len != sizeof(mail)) {
-        /*logger_log(WARN, "Failed to deliver a mail!");*/
-        goto next;
-    }
+    /* data read was not a pointer */
+    if (len != sizeof(mail)) goto next;
 
-    /* serialize it */
-    logger_log(INFO, "Delivering mail at address %p", mail);
+    /* ip info */
+    if (mail->extra.origin_ip.ss_family == AF_INET6)
+        inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)&(mail->extra.origin_ip))->sin6_addr), ip, 46);
+    else
+        inet_ntop(AF_INET, &(((struct sockaddr_in *)&(mail->extra.origin_ip))->sin_addr), ip, 46);
+    getnameinfo((struct sockaddr *)(&(mail->extra.origin_ip)), sizeof(mail->extra.origin_ip), hst, sizeof(hst), NULL, 0, 0);
 
-    printf("From: `%s` via `%s`\n", mail->from_v, mail->froms_v);
-    printf("To: ");
-    for (i = 0; i < mail->to_c; i++) {
-        printf("`%s`", mail->to_v + i);
-        i += strlen(mail->to_v + i);
-        if (i <= mail->to_c) printf(",");
-    }
-    printf("\n");
-    printf("Body: ```\n%s```\n", mail->data_v);
+    /* Display log */
+    logger_log(INFO, "Mail from %s (%s) %s",
+                strncmp(hst, "::ffff:", 7)?hst:&hst[7],
+                strncmp(ip, "::ffff:", 7)?ip:&ip[7],
+                (mail->extra).using_ssl?"(secured using TLS)":"(not secure)"
+                );
+
+    /* call serialize function to file */
+    mail_serialize_file(mail);
 
     /* cleanup when done */
     mail_destroy(mail);

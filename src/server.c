@@ -47,12 +47,14 @@ sig_atomic_t running = 1;
 /* stack size for each child process */
 #define CHILD_STACKSIZE         65536
 
+#ifndef USE_PTHREADS
 /* flags to the clone call */
 /*
  * CLONE_FILES to share file descriptors, CLONE_SYSVSEM because why not,
  * CLONE_VM to share memory
  */
 #define CLONE_FLAGS (CLONE_FILES | CLONE_SYSVSEM | CLONE_VM)
+#endif
 
 /* configuration parser */
 static int server_conf(void *c, const char *s, const char *k, const char *v) {
@@ -150,6 +152,13 @@ int main(int argc, char **argv) {
     struct epoll_event epint = {0};
     struct sigaction action;
 
+    /* hi, world! */
+#ifndef DEBUG
+    logger_log(INFO, "%s starting!", MAILVER);
+#else
+    logger_log(WARN, "debugging %s!", MAILVER);
+#endif
+
     /* load configuration */
     config.bind.sin6_family = AF_INET6;
     if (ini_parse(argc == 2 ? argv[1] : "barid.ini", server_conf, &config) < 0) {
@@ -162,9 +171,6 @@ int main(int argc, char **argv) {
 
     /* setup the allowed email addresses */
     mail_set_allowed(&config);
-
-    /* hi, world! */
-    logger_log(INFO, "%s starting!", MAILVER);
 
     /* start by creating a socket */
     if ((sfd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
@@ -218,6 +224,7 @@ int main(int argc, char **argv) {
         networkers[i].pfd = pfd[1]; /* write end */
         networkers[i].sconf = &config; /* TODO: is it weird to pass a local stack variable to a different thread? */
 
+#ifndef USE_PTHREADS
         /* allocate stack for child */
         networkers[i].stack = malloc(CHILD_STACKSIZE);
         if (!networkers[i].stack) {
@@ -229,11 +236,18 @@ int main(int argc, char **argv) {
         networkers[i].pid = clone(networker_loop,
                                     (unsigned char *)networkers[i].stack + CHILD_STACKSIZE,
                                     CLONE_FLAGS,
-                                    networkers + i);
+                                    networkers + i
+                                    );
         if (networkers[i].pid < 0) {
             logger_log(ERR, "Failed to create worker thread: %s", strerror(errno));
             return -__LINE__;
         }
+#else
+        if (pthread_create(&(networkers[i].thread), NULL, networker_loop, networkers + i)) {
+            logger_log(ERR, "Failed to create worker thread");
+            exit(-__LINE__);
+        }
+#endif
     }
 
     /* set up worker threads' handles */
@@ -248,6 +262,7 @@ int main(int argc, char **argv) {
         /* create swork workers */
         serworkers[i].pfd = pfd[0]; /* read end */
 
+#ifndef USE_PTHREADS
         /* allocate stack for child */
         serworkers[i].stack = malloc(CHILD_STACKSIZE);
         if (!serworkers[i].stack) {
@@ -259,11 +274,18 @@ int main(int argc, char **argv) {
         serworkers[i].pid = clone(serworker_loop,
                                     (unsigned char *)serworkers[i].stack + CHILD_STACKSIZE,
                                     CLONE_FLAGS,
-                                    serworkers + i);
+                                    serworkers + i
+                                    );
         if (serworkers[i].pid < 0) {
             logger_log(ERR, "Failed to create worker thread: %s", strerror(errno));
             return -__LINE__;
         }
+#else
+        if (pthread_create(&(serworkers[i].thread), NULL, serworker_loop, serworkers + i)) {
+            logger_log(ERR, "Failed to create worker thread");
+            exit(-__LINE__);
+        }
+#endif
     }
 
     /* catch signals */
@@ -320,16 +342,26 @@ int main(int argc, char **argv) {
     logger_log(ERR, "%s quitting!", MAILVER);
 
     for (int i = 0; i < config.network; i++) {
+#ifndef USE_PTHREADS
         /* before clearing the stacks, waitpid just in case */
         waitpid(networkers[i].pid, NULL, 0);
         free(networkers[i].stack);
+#else
+        pthread_kill(networkers[i].thread, SIGTERM);
+        pthread_join(networkers[i].thread, NULL);
+#endif
     }
     free(networkers);
 
     for (int i = 0; i < config.delivery; i++) {
+#ifndef USE_PTHREADS
         /* before clearing the stacks, waitpid just in case */
         waitpid(serworkers[i].pid, NULL, 0);
         free(serworkers[i].stack);
+#else
+        pthread_kill(serworkers[i].thread, SIGTERM);
+        pthread_join(serworkers[i].thread, NULL);
+#endif
     }
     free(serworkers);
 

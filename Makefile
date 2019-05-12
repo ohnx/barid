@@ -1,6 +1,7 @@
 INCLUDES+=-Iinclude/ -Idist/mbedtls/include -Idist/inih
 LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih
 CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic -D_DEFAULT_SOURCE -D_GNU_SOURCE
+CFLAGS+=-DUSE_PTHREADS
 
 OBJ=objs/server.o objs/logger.o objs/networker.o objs/serworker.o objs/net.o
 OBJ+=objs/smtp.o objs/mail.o
@@ -35,8 +36,8 @@ debug/hook_net.so: debug/hook_net.c
 
 .PHONY: debug
 debug: $(OUTPUT)
-debug: CFLAGS+=-g -O0
-	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT) -p 2525 example.com example.org example.net -s
+debug: CFLAGS+=-g -O0 -DUSE_PTHREADS -DDEBUG
+	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT)
 
 .PHONY: clean
 clean:
