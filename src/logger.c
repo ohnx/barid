@@ -5,6 +5,8 @@
 #include <stdarg.h>
 /* time_t, struct tm, time(), localtime() */
 #include <time.h>
+/* pthread_mutex_t, pthread_mutex_lock(), pthread_mutex_unlock() */
+#include <pthread.h>
 /* enum logger_level*/
 #include "logger.h"
 /* KBLU, RESET, etc. */
@@ -12,8 +14,12 @@
 
 void logger_log(enum logger_level level, const char *fmt, ...) {
     va_list args;
-    time_t t;
-    struct tm *tm;
+    static time_t t;
+    static struct tm *tm;
+    static pthread_mutex_t logger_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+    /* lock the mutex for stderr */
+    pthread_mutex_lock(&logger_mutex);
 
     /* time info */
     time(&t);
@@ -34,4 +40,7 @@ void logger_log(enum logger_level level, const char *fmt, ...) {
     vfprintf(stderr, fmt, args);
     va_end(args);
     fprintf(stderr, "\n");
+
+    /* unlock */
+    pthread_mutex_unlock(&logger_mutex);
 }

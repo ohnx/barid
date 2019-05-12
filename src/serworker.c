@@ -65,6 +65,6 @@ next:
     else goto start;
 
 end:
-    printf("goodbye serworker!\n");
+    logger_log(INFO, "Delivery thread terminating!");
     return 0;
 }
