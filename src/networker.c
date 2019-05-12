@@ -151,8 +151,8 @@ next_line:
 
         i = mail_appenddata(client->mail, (char *)(lns));
         switch (i) {
-        case MAIL_ERROR_DATAMAX: smtp_handlecode(client, 522);
-        case MAIL_ERROR_OOM: smtp_handlecode(client, 451);
+        case MAIL_ERROR_DATAMAX: lc = 552; goto line_handle_code; break;
+        case MAIL_ERROR_OOM: lc = 451; goto line_handle_code; break;
         }
         goto next_line;
     }

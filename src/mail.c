@@ -258,12 +258,19 @@ int mail_appenddata(struct mail *email, const char *data) {
         (email->extra).data_total_len *= 2;
 
         /* ensure max bounds for memory allocation */
-        if (((email->extra).data_total_len) > MAIL_MAX_DATA_C)
+        if (((email->extra).data_total_len) > MAIL_MAX_DATA_C) {
+            /* restore the old amount of memory available */
+            (email->extra).data_total_len /= 2;
             return MAIL_ERROR_DATAMAX;
+        }
 
         /* reallocation + error checking */
         x = realloc(email->data_v, (email->extra).data_total_len);
-        if (!x) return MAIL_ERROR_OOM;
+        if (!x) {
+            /* restore the old amount of memory available */
+            (email->extra).data_total_len /= 2;
+            return MAIL_ERROR_OOM;
+        }
         email->data_v = (char *)x;
     }
 

@@ -70,7 +70,7 @@ int smtp_handlecode(struct client *client, int code) {
     case 501: return net_tx(client, (ucp)"501 ARGUMENT ERROR\r\n", 20) > 0 ? 0 : 1;
     case 502: return net_tx(client, (ucp)"502 NOTIMPLEMENTED\r\n", 20) > 0 ? 0 : 1;
     case 503: return net_tx(client, (ucp)"503 WRONG SEQUENCE\r\n", 20) > 0 ? 0 : 1;
-    case 522: return net_tx(client, (ucp)"522 TOO MUCH DATA!\r\n", 20) > 0 ? 0 : 1;
+    case 552: return net_tx(client, (ucp)"552 TOO MUCH DATA!\r\n", 20) > 0 ? 0 : 1;
     case 550: return net_tx(client, (ucp)"550 USER NOT LOCAL\r\n", 20) > 0 ? 0 : 1;
     /* Unknown??!? */
     default: return 0;
