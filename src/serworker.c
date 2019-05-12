@@ -65,6 +65,5 @@ next:
     else goto start;
 
 end:
-    logger_log(INFO, "Delivery thread terminating!");
     return 0;
 }

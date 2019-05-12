@@ -6,10 +6,6 @@
 /* strstr(), strncmp() */
 #include <string.h>
 
-/* (both = setuid) */
-#include <sys/types.h>
-#include <unistd.h>
-
 /* mbedtls_ssl_free */
 #include "mbedtls/ssl.h"
 
@@ -42,16 +38,15 @@ void *networker_loop(void *z) {
     struct epoll_event epevnt;
     struct client *client;
     struct mail *email_tmp;
-
     int rcn, ll, i, lc;
     unsigned char *lns, *lptr;
     enum known_verbs lverb;
 
-    /* remove some of our permissions since we don't need them */
-    setuid(65534); /* 65534 = nobody */
-
 start:
-    if (epoll_wait(self->efd, &epevnt, 1, -1) < 0) goto end;
+    if (epoll_wait(self->efd, &epevnt, 1, -1) < 0) {
+        if (errno == EINTR && running) goto start;
+        goto end;
+    }
     client = (struct client *)(epevnt.data.ptr);
 
     /* error occurred */
@@ -355,7 +350,6 @@ next_evt:
     else goto start;
 
 end:
-    logger_log(INFO, "Network thread terminating!");
     return 0;
 
 client_cleanup:
