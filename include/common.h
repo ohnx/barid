@@ -68,6 +68,9 @@ struct client {
     /* the mail struct assigned to the client */
     struct mail *mail;
 
+    /* last return code */
+    int ret;
+
     /* SSL context */
     mbedtls_ssl_context *ssl;
 

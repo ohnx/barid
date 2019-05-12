@@ -30,22 +30,20 @@ static char ssl_init = 0;
 /* called in a thread context */
 int net_rx(struct client *client) {
     if (!(client->ssl))
-        return read(client->cfd, client->buf + client->bio, LARGEBUF - client->bio - 1);
-    return mbedtls_ssl_read(client->ssl, (unsigned char *)(client->buf + client->bio), LARGEBUF - client->bio - 1);
+        return client->ret = read(client->cfd, client->buf + client->bio, LARGEBUF - client->bio - 1);
+    return client->ret = mbedtls_ssl_read(client->ssl, (unsigned char *)(client->buf + client->bio), LARGEBUF - client->bio - 1);
 }
 
 /* called in a thread context */
 int net_tx(struct client *client, unsigned char *buf, size_t bufsz) {
     if (!(client->ssl))
-        return write(client->cfd, buf, bufsz);
-    return mbedtls_ssl_write(client->ssl, (unsigned char *)buf, bufsz);
+        return client->ret = write(client->cfd, buf, bufsz);
+    return client->ret = mbedtls_ssl_write(client->ssl, (unsigned char *)buf, bufsz);
 }
 
 /* called in a thread context */
 /* initiate SSL handshake */
 int net_sssl(struct client *client) {
-    int ret;
-
     if (!ssl_init || !client) return -1;
 
     if (client->ssl) {
@@ -69,9 +67,9 @@ int net_sssl(struct client *client) {
 
 hs_step:
     /* perform SSL handshake */
-    ret = mbedtls_ssl_handshake(client->ssl);
+    client->ret = mbedtls_ssl_handshake(client->ssl);
 
-    switch (ret) {
+    switch (client->ret) {
     case 0:
         /* handshake done */
         client->state = S_HELO;
@@ -94,9 +92,17 @@ hs_step:
 int net_close(struct client *client) {
     if (!(client->ssl))
         return close(client->cfd);
-    mbedtls_ssl_close_notify(client->ssl);
+
+    /* send close notify if required */
+    if (client->ret > 0
+        || client->ret == MBEDTLS_ERR_NET_CONN_RESET
+        || client->ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY)
+        mbedtls_ssl_close_notify(client->ssl);
+
+    /* free context data and stuff */
     mbedtls_ssl_free(client->ssl);
 
+    /* free the ssl context itself */
     free(client->ssl);
     return 0;
 }

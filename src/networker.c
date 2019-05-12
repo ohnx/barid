@@ -82,7 +82,7 @@ rx_again:
     rcn = net_rx(client);
 
     /* check for errors */
-    if (rcn == 0) { /* Remote host closed connection */
+    if (rcn == 0 || rcn == MBEDTLS_ERR_SSL_CONN_EOF) { /* Remote host closed connection */
         goto client_cleanup;
     } else if (rcn < 0) { /* Error on socket */
         switch (rcn) {
