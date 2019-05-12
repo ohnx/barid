@@ -292,10 +292,14 @@ int main(int argc, char **argv) {
     memset(&action, 0, sizeof(struct sigaction));
     sigemptyset(&action.sa_mask);
     action.sa_flags = SA_NODEFER;
+    /* cleanup after sigterm, sigint, and sighup */
     action.sa_handler = cleanup;
     sigaction(SIGTERM, &action, NULL);
     sigaction(SIGINT, &action, NULL);
     sigaction(SIGHUP, &action, NULL);
+    /* ignore sigpipe */
+    action.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, &action, NULL);
 
     /* loop forever! */
     while (running) {
