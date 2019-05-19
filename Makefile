@@ -28,19 +28,15 @@ objs/%.o: src/%.c
 	@mkdir -p objs/
 	$(CC) -c -o $@ $< $(CFLAGS) $(EXTRA)
 
-$(OUTPUT): dist/libmbedtls.a dist/libinih.a $(OBJ)
-	$(CC) $^ -o $@ $(LIBS) $(LDFLAGS)
-
-debug/hook_net.so: debug/hook_net.c
-	$(MAKE) -C debug/
+$(OUTPUT): dist/libmbedtls.a $(OBJ)
+	$(CC) $^ -o $@ $(LIBS) $(CFLAGS)
 
 .PHONY: debug
+debug: CFLAGS += -g -O0
 debug: $(OUTPUT)
 debug: CFLAGS+=-g -O0 -DUSE_PTHREADS -DDEBUG
-	# valgrind --leak-check=full --show-leak-kinds=all ./$(OUTPUT)
 
 .PHONY: clean
 clean:
 	-rm -f $(OBJ)
 	-rm -f $(OUTPUT)
-
