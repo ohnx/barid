@@ -3,4 +3,4 @@ objs/
 barid
 *.so
 *.a
-friends.txt
+barid.ini

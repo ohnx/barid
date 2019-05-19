@@ -1,36 +1,61 @@
+/* this file deals with setting up mail information */
+
+/* calloc(), free(), etc. */
+#include <stdlib.h>
+/* memcpy(), etc. */
+#include <string.h>
+/* getpeername() */
+#include <sys/socket.h>
+/* time(), etc. */
+#include <time.h>
+
+/* struct mail, etc. */
+#include "common.h"
+/* MAIL_ERROR_OOM, etc. */
 #include "mail.h"
 
-struct mail *mail_new_internal(int hasExtra) {
+char *allowed_hosts;
+
+void mail_set_allowed(struct barid_conf *conf) {
+    allowed_hosts = conf->domains;
+}
+
+struct mail *mail_new(const char *froms) {
     struct mail *email;
+    int i;
 
     email = calloc(1, sizeof(struct mail));
-
-    /* r/w email */
     if (email == NULL) return NULL;
-    if (hasExtra) {
-        email->extra = calloc(1, sizeof(struct mail_internal_info));
 
-        /* error on OOM */
-        if (email->extra == NULL) {
+    /* initial allocations for expandable buffers */
+    email->extra.to_total_len = 128;
+    email->to_v = calloc(email->extra.to_total_len, 1);
+    if (email->to_v == NULL) {
+        free(email);
+        return NULL;
+    }
+
+    email->extra.data_total_len = 256;
+    email->data_v = calloc(email->extra.data_total_len, 1);
+    if (email->data_v == NULL) {
+        free(email->to_v);
+        free(email);
+        return NULL;
+    }
+
+    /* from server */
+    if (froms) {
+        i = strlen(froms);
+        email->froms_c = i + 1;
+        email->froms_v = malloc(i + 1);
+        if (email->froms_v == NULL) {
+            free(email->to_v);
+            free(email->data_v);
             free(email);
             return NULL;
         }
 
-        /* initial allocations for expandable buffers */
-        (email->extra)->to_total_len = 128;
-        email->to_v = calloc(128, 1);
-        if (email->to_v == NULL) {
-            free(email->extra);
-            free(email);
-            return NULL;
-        }
-        (email->extra)->data_total_len = 256;
-        email->data_v = calloc(256, 1);
-        if (email->data_v == NULL) {
-            free(email->extra);
-            free(email);
-            return NULL;
-        }
+        memcpy(email->froms_v, froms, email->froms_c);
     }
 
     return email;
@@ -53,7 +78,7 @@ int mail_reset(struct mail *email) {
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
     int data_len, i, t;
     if (data)
-        data_len = strlen(data) + 1; /* include null */
+        data_len = strlen(data);
     t = 0;
 
     switch(attr) {
@@ -62,24 +87,27 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
         if (data_len == 0) return MAIL_ERROR_PARSE;
 
         /* copy the data */
-        if (email->froms_v) free(email->froms_v);
-        email->froms_c = data_len;
-        email->froms_v = malloc(data_len);
+        if (email->froms_v) {
+            free(email->froms_v);
+        }
+        email->froms_c = data_len + 1;
+        email->froms_v = malloc(email->froms_c);
 
         /* successful allocation check */
         if (email->froms_v == NULL) return MAIL_ERROR_OOM;
 
         /* copy the data */
-        memcpy(email->froms_v, data, data_len);
+        memcpy(email->froms_v, data, email->froms_c);
 
         /* no error */
         return MAIL_ERROR_NONE;
     case FROM:
         /* ensure brackets around email (if not, return error) */
-        if (!(*data == '<' && data[data_len-2] == '>')) return MAIL_ERROR_PARSE;
+        if (!(*data == '<' && data[data_len-1] == '>')) return MAIL_ERROR_PARSE;
+        
 
         /* ensure exactly at least one @ symbol present */
-        for (i = 0; i < data_len-1; i++) {
+        for (i = 0; i < data_len; i++) {
             if (data[i] == '@') t++;
             /* Newlines are not allowed in the mail FROM */
             if (data[i] == '\n') return MAIL_ERROR_INVALIDEMAIL;
@@ -87,51 +115,56 @@ int mail_setattr(struct mail *email, enum mail_attr attr, const char *data) {
         if (t < 1) return MAIL_ERROR_PARSE;
 
         /* for a FROM email, that's all the checking we will do. */
-        email->from_c = data_len - 2; /* subtract the '<' and '>' */
-        email->from_v = malloc(data_len - 2); /* subtract the <> */
+        email->from_c = data_len - 1; /* subtract the '<' and '>', but add '\0' */
+        email->from_v = malloc(email->from_c);
 
         /* successful allocation check */
         if (email->from_v == NULL) return MAIL_ERROR_OOM;
 
         /* copy the data, omitting the start '<' and end '\0' */
-        memcpy(email->from_v, data + 1, data_len - 2);
+        memcpy(email->from_v, data + 1, email->from_c);
 
         /* replace end '>' with '\0' */
-        email->from_v[data_len - 3] = 0;
+        email->from_v[email->from_c - 1] = 0;
 
         /* no error */
         return MAIL_ERROR_NONE;
     case SSL_USED:
-        /* make sure we're not trying to set SSL enabled on a readonly email */
-        if (email->extra == NULL) return MAIL_ERROR_PROGRAM;
-
-        (email->extra)->using_ssl = 1;
+        (email->extra).using_ssl = 1;
 
         return MAIL_ERROR_NONE;
+    case REMOTE_ADDR:
+        if (!data) return MAIL_ERROR_PROGRAM;
+        /* getpeername() fetches the peer's ip address */
+        t = sizeof(email->extra.origin_ip);
+        if (getpeername(*((int *)(data)), (struct sockaddr *)&(email->extra.origin_ip), (unsigned int *)&t) < 0)
+            return MAIL_ERROR_MISC;
+        else
+            return MAIL_ERROR_NONE;
     default:
         /* should be calling mail_addattr() */
         return MAIL_ERROR_PROGRAM;
     }
 }
 
-int mail_checkinlist(const char *str, char *list, size_t len) {
-    char *ptr = server_hostname, *start = server_hostname;
+static int mail_checkinlist(const char *str, char *list, size_t len) {
+    char *ptr = list, *start = list;
 
     /* loop through hostnames in server_hostname */
     do {
-        if (*ptr == ',') {
+        if (*ptr == ' ') {
             /* found end of hostname */
             *ptr = '\0';
 
             /* return if equal */
             if (!strncmp(str, start, len)) {
-                *ptr = ',';
+                *ptr = ' ';
                 return 1;
             }
 
             /* not equal, keep searching */
             start = ptr + 1;
-            *ptr = ',';
+            *ptr = ' ';
         }
     } while (*(ptr++) != '\0');
 
@@ -166,26 +199,23 @@ int mail_addattr(struct mail *email, enum mail_attr attr, const char *data) {
         if (atpos == NULL) return MAIL_ERROR_PARSE;
 
         /* temporarily remove the trailing '>' */
-        /* ensure valid domain (*server_hostname = '\0' = wildcard listen) */
-        if (*server_hostname != '\0' && !mail_checkinlist(atpos+1, server_hostname, data_len-(atpos-data)-3)) {
+        /* ensure valid domain (*server_hostname = '*' = wildcard listen) */
+        if (*allowed_hosts != '*' && !mail_checkinlist(atpos+1, allowed_hosts, data_len-(atpos-data)-3)) {
             return MAIL_ERROR_USRNOTLOCAL;
         }
 
-        /* make sure we're not trying to append to a readonly email */
-        if (email->extra == NULL) return MAIL_ERROR_PROGRAM;
-
         /* check there's enough room for this address */
-        while (((email->extra)->to_total_len) < (email->to_c + data_len)) {
+        while (((email->extra).to_total_len) < (email->to_c + data_len)) {
             void *x;
             /* reallocate memory */
-            (email->extra)->to_total_len *= 2;
+            (email->extra).to_total_len *= 2;
 
             /* ensure max bounds for memory allocation */
-            if (((email->extra)->to_total_len) > MAIL_MAX_TO_C)
+            if (((email->extra).to_total_len) > MAIL_MAX_TO_C)
                 return MAIL_ERROR_RCPTMAX;
 
             /* reallocation + error checking */
-            x = realloc(email->to_v, (email->extra)->to_total_len);
+            x = realloc(email->to_v, (email->extra).to_total_len);
             if (!x) return MAIL_ERROR_OOM;
             email->to_v = (char *)x;
         }
@@ -211,32 +241,36 @@ int mail_appenddata(struct mail *email, const char *data) {
     int data_len;
     char appB;
 
-    /* Replace .. with single . */
+    /* Replace .. with single . (specs in SMTP) */
     if (*data == '.') data++;
 
     /* get data length */
     data_len = strlen(data) + 1;
     
-    /* Need to add a '>' to 'From ' (there is corruption here, oops) */
+    /* Need to add a '>' to 'From ' */
     appB = !strncmp(data, "From ", 5);
     if (appB) data_len++;
 
-    /* make sure we're not trying to append to a readonly email */
-    if (email->extra == NULL) return MAIL_ERROR_PROGRAM;
-
     /* check there's enough room for this line of data (if not, realloc) */
-    while (((email->extra)->data_total_len) < (email->data_c + data_len)) {
+    while (((email->extra).data_total_len) < (email->data_c + data_len)) {
         void *x;
         /* reallocate memory */
-        (email->extra)->data_total_len *= 2;
+        (email->extra).data_total_len *= 2;
 
         /* ensure max bounds for memory allocation */
-        if (((email->extra)->data_total_len) > MAIL_MAX_DATA_C)
+        if (((email->extra).data_total_len) > MAIL_MAX_DATA_C) {
+            /* restore the old amount of memory available */
+            (email->extra).data_total_len /= 2;
             return MAIL_ERROR_DATAMAX;
+        }
 
         /* reallocation + error checking */
-        x = realloc(email->data_v, (email->extra)->data_total_len);
-        if (!x) return MAIL_ERROR_OOM;
+        x = realloc(email->data_v, (email->extra).data_total_len);
+        if (!x) {
+            /* restore the old amount of memory available */
+            (email->extra).data_total_len /= 2;
+            return MAIL_ERROR_OOM;
+        }
         email->data_v = (char *)x;
     }
 
@@ -244,7 +278,7 @@ int mail_appenddata(struct mail *email, const char *data) {
     if (!appB)
         memcpy(email->data_v + email->data_c, data, data_len);
     else {
-        /* Need to add a '>' to 'From ' (there is corruption here, oops) */
+        /* Need to add a '>' to 'From ' */
         memcpy(email->data_v + email->data_c + 1, data, data_len - 1);
         *(email->data_v + email->data_c) = '>';
     }
@@ -256,11 +290,78 @@ int mail_appenddata(struct mail *email, const char *data) {
     return MAIL_ERROR_NONE;
 }
 
+int mail_serialize_file(struct mail *email) {
+    char *at_loc, *fo, *fo_o, *from_fix, *cps;
+    char timebuf[26];
+    time_t timep;
+    int i;
+    FILE *fp;
+
+    /* get time as string */
+    time(&timep);
+    ctime_r(&timep, timebuf);
+
+    /* Replace ' ' with '-' in mbox format */
+    from_fix = strdup(email->from_v);
+    for (i = 0; i < email->from_c; i++)
+        if (from_fix[i] == ' ')
+            from_fix[i] = '-';
+
+    /* loop through all addresses to deliver to */
+    for (i = 0; i < email->to_c; i++) {
+        /* temporarily clear '@' to ignore domain */
+        at_loc = strchr(email->to_v + i, '@');
+        *at_loc = 0;
+
+        /* allocate memory for file output name */
+        fo = fo_o = strdup(email->to_v + i);
+
+        /* ignore all characters after last + sign */
+        cps = strchr(fo, '+');
+        if (cps) *cps = 0;
+
+        /* check for comments at start and skip past them */
+        if (*fo == '(' && (cps = strchr(fo, ')')) != NULL) fo = cps+1;
+
+        /* check for comments at end and null them out */
+        if (fo[strlen(fo)] == ')' && (cps = strchr(fo, '(')) != NULL) *cps = 0;
+
+        /* open the specified file */
+        fp = fopen(fo, "a");
+        if (fp == NULL) goto error;
+
+        /* get time (timebuf has \n already) */
+        if (fprintf(fp, "From %s %s", from_fix, timebuf) < 0) goto error;
+
+        /* print out data */
+        if (fprintf(fp, "%s\n", email->data_v) < 0) goto error;
+
+        /* close file + clean up */
+        if (fclose(fp) != 0) goto error;
+
+        free(fo_o);
+        fo_o = NULL;
+
+        /* advance to next one */
+        *at_loc = '@';
+        i += strlen(email->to_v + i);
+        continue;
+
+    error:
+        /* failed to open file, return error */
+        free(fo_o);
+        free(from_fix);
+        return -1;
+    }
+
+    free(from_fix);
+    return 0;
+}
+
 void mail_destroy(struct mail *email) {
     free(email->froms_v);
     free(email->from_v);
     free(email->to_v);
     free(email->data_v);
-    free(email->extra);
     free(email);
 }
