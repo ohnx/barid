@@ -1,7 +1,7 @@
 INCLUDES+=-Iinclude/ -Idist/mbedtls/include -Idist/inih -Idist/libspf2/src/include
 INCLUDES+=-Idist/duktape/duktape-src
 LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih -lspf2 -l:libresolv.a
-LIBS+=-lduktape
+LIBS+=-lduktape -lm
 CFLAGS+=$(INCLUDES) -Wall -Werror -Wextra -std=c99 -pedantic -D_DEFAULT_SOURCE -D_GNU_SOURCE
 CFLAGS+=-DUSE_PTHREADS
 

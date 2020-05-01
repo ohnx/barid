@@ -9,7 +9,7 @@
 #include <netinet/in.h>
 /* mbedtls_ssl_context */
 #include "mbedtls/ssl.h"
-/*SPF_server_t*/
+/* SPF_server_t */
 #include "spf.h"
 
 /* max length of an email's recipients (in bytes)

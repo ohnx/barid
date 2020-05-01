@@ -9,6 +9,10 @@
 #include <arpa/inet.h>
 /* getnameinfo() */
 #include <netdb.h>
+/* SPF_request_*, SPF_response_* */
+#include "spf.h"
+/* duk* */
+#include "duktape.h"
 
 /* running flag */
 #include "common.h"
@@ -34,6 +38,13 @@ void *serworker_loop(void *z) {
     char ip[46], hst[NI_MAXHOST];
     SPF_request_t *spf_request = NULL;
     SPF_response_t *spf_response = NULL;
+    duk_idx_t mobj, sobj, robj;
+    duk_context *ctx = duk_create_heap_default();
+
+    if (!ctx) {
+        logger_log(ERR, "Failed to initialize duktape context");
+        goto end;
+    }
 
 start:
     /* read in the pointer to the mail object to serialize */
@@ -91,6 +102,45 @@ start:
     /* call serialize function to file */
     mail_serialize_file(mail);
 
+    /* have some fun */
+    mobj = duk_push_object(ctx);
+    robj = duk_push_array(ctx);
+    duk_put_prop_string(ctx, mobj, "recipients");
+    sobj = duk_push_object(ctx);
+    duk_put_prop_string(ctx, mobj, "sender");
+
+    /* sender properties */
+    duk_push_string(ctx, mail->froms_v);
+    duk_put_prop_string(ctx, sobj, "reported_server");
+
+    duk_push_string(ctx, mail->from_v);
+    duk_put_prop_string(ctx, sobj, "email");
+
+    duk_push_string(ctx, strncmp(ip, "::ffff:", 7)?ip:&ip[7]);
+    duk_put_prop_string(ctx, sobj, "ip");
+
+    duk_push_string(ctx, strncmp(hst, "::ffff:", 7)?hst:&hst[7]);
+    duk_put_prop_string(ctx, sobj, "hostname");
+
+    /* recipient(s) info */
+    int k = 0;
+    duk_push_string(ctx, mail->to_v);
+    duk_put_prop_index(ctx, robj, k);
+
+    for (int i = 1; i < mail->to_c; i++) {
+        if (mail->to_v[i-1] == '\0') {
+            k++;
+            duk_push_string(ctx, mail->to_v + i);
+            duk_put_prop_index(ctx, robj, k);
+        }
+    }
+
+    /* ssl info */
+    
+
+    /* TODO: logger */
+    /* TODO: fs stuff? */
+
     goto cleanup_mail;
 
 spf_fail:
@@ -121,5 +171,6 @@ next:
     else goto start;
 
 end:
+    if (ctx) duk_destroy_heap(ctx);
     return 0;
 }
