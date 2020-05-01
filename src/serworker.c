@@ -54,13 +54,16 @@ start:
         spf_request = SPF_request_new(self->sconf->spf_server);
 
         /* set the right ip */
-        if (mail->extra.origin_ip.ss_family == AF_INET6) {
-            if (SPF_request_set_ipv6(spf_request,
-                                    ((struct sockaddr_in6 *)&(mail->extra.origin_ip))->sin6_addr))
-                goto spf_fail;
-        } else {
+        if (mail->extra.origin_ip.ss_family == AF_INET) {
             if (SPF_request_set_ipv4(spf_request,
                                     ((struct sockaddr_in *)&(mail->extra.origin_ip))->sin_addr))
+                goto spf_fail;
+        } else if (!strncmp(ip, "::ffff:", 7)) {
+            if (SPF_request_set_ipv4_str(spf_request, ip+7))
+                goto spf_fail;
+        } else {
+            if (SPF_request_set_ipv6(spf_request,
+                                    ((struct sockaddr_in6 *)&(mail->extra.origin_ip))->sin6_addr))
                 goto spf_fail;
         }
 
