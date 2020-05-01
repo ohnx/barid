@@ -1,5 +1,7 @@
 INCLUDES+=-Iinclude/ -Idist/mbedtls/include -Idist/inih -Idist/libspf2/src/include
+INCLUDES+=-Idist/duktape/duktape-src
 LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih -lspf2 -l:libresolv.a
+LIBS+=-lduktape
 CFLAGS+=$(INCLUDES) -Wall -Werror -Wextra -std=c99 -pedantic -D_DEFAULT_SOURCE -D_GNU_SOURCE
 CFLAGS+=-DUSE_PTHREADS
 
@@ -19,6 +21,12 @@ dist/libmbedtls.a:
 	$(MAKE) lib -C dist/mbedtls
 	cp dist/mbedtls/library/*.a dist/
 
+dist/libduktape.a:
+	-@git submodule update --init --recursive
+	cd dist/duktape; python2 tools/configure.py --output-directory duktape-src/
+	cd dist/duktape/duktape-src; $(CC) -c -o duktape.o duktape.c $(CFLAGS) $(EXTRA)
+	ar rcs dist/libduktape.a dist/duktape/duktape-src/duktape.o
+
 dist/libspf2.a:
 	-@git submodule update --init --recursive
 	cd dist/libspf2; ./configure
@@ -34,7 +42,7 @@ objs/%.o: src/%.c
 	@mkdir -p objs/
 	$(CC) -c -o $@ $< $(CFLAGS) $(EXTRA)
 
-$(OUTPUT): dist/libmbedtls.a dist/libspf2.a dist/libinih.a $(OBJ)
+$(OUTPUT): dist/libmbedtls.a dist/libspf2.a dist/libinih.a dist/libduktape.a $(OBJ)
 	$(CC) $(OBJ) -o $@ $(LIBS) $(CFLAGS)
 
 .PHONY: debug
