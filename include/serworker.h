@@ -20,6 +20,9 @@ struct serworker {
     pthread_t thread;
 #endif
 
+    /* main barid config */
+    struct barid_conf *sconf;
+
     /* serialization fd */
     int pfd;
 };

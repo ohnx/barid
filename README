@@ -9,8 +9,7 @@ barid is a simple mail server written in C for Linux. barid is *not* a relaying
 server; the intention is for barid to be run on a computer and receive mail
 from other Mail Transfer Agents (MTA's).
 
-barid is multi-threaded, can receive secured email using STARTTLS, and fully
-supports IPv6. barid stores received mails in the Mbox format, but other methods
-are planned for in the future(tm).
-
-Currently, there are no anti-spam features.
+barid is multi-threaded, can receive secured email using STARTTLS, supports
+checking SPF records to verify senders, and is 100% IPv6-compatible. barid
+stores received mails in the Mbox format, but other methods are planned for in
+the future(tm).

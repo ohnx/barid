@@ -24,7 +24,9 @@
 /* waitpid() */
 #include <sys/wait.h>
 /* ini_parse */
-#include <ini.h>
+#include "ini.h"
+/* SPF_server_new(), SPF_server_free() */
+#include "spf.h"
 
 /* MAIL_VER, struct barid_conf */
 #include "common.h"
@@ -44,6 +46,7 @@
 /* global variables */
 sig_atomic_t running = 1;
 
+
 /* stack size for each child process */
 #define CHILD_STACKSIZE         65536
 
@@ -60,6 +63,7 @@ sig_atomic_t running = 1;
 static int server_conf(void *c, const char *s, const char *k, const char *v) {
     struct barid_conf *sconf = (struct barid_conf *)c;
     char extra[23];
+    int z;
 
     if (!strcmp(s, "general")) {
         if (!strcmp(k, "host") && !sconf->host) sconf->host = strdup(v);
@@ -107,12 +111,12 @@ static int server_conf(void *c, const char *s, const char *k, const char *v) {
                 logger_log(WARN, "Invalid bind address, using default ANY");
             }
         } else if (!strcmp(k, "port")) {
-            sconf->bind.sin6_port = atoi(v);
-            if (sconf->bind.sin6_port < 1 || sconf->bind.sin6_port > 65535) {
-                sconf->bind.sin6_port = 2525;
-                logger_log(WARN, "Invalid port, using default %d", sconf->bind.sin6_port);
+            z = atoi(v);
+            if (z < 1 || z > 65535) {
+                z = 2525;
+                logger_log(WARN, "Invalid port, using default %d", z);
             }
-            sconf->bind.sin6_port = htons(sconf->bind.sin6_port);
+            sconf->bind.sin6_port = htons((short)z);
         }
     } else if (!strcmp(s, "ssl")) {
         if (!strcmp(k, "key") && !sconf->ssl_key) {
@@ -133,6 +137,40 @@ static int server_conf(void *c, const char *s, const char *k, const char *v) {
             sconf->ssl_key = NULL;
             sconf->ssl_cert = NULL;
         }
+    } else if (!strcmp(s, "delivery")) {
+        if (!strcmp(k, "enable_spf")) {
+            if (!strcmp(v, "true") || !strcmp(v, "1")) {
+#ifdef DEBUG
+                sconf->spf_server = SPF_server_new(SPF_DNS_CACHE, 1);
+#else
+                sconf->spf_server = SPF_server_new(SPF_DNS_CACHE, 0);
+#endif
+                if (!sconf->spf_server) {
+                    logger_log(WARN, "SPF disabled due to setup error");
+                }
+            } else if (!strcmp(v, "false") || !strcmp(v, "0")) {
+                sconf->spf_server = NULL;
+            } else {
+                logger_log(WARN, "Invalid option for enable_spf in delivery, using default true");
+#ifdef DEBUG
+                sconf->spf_server = SPF_server_new(SPF_DNS_CACHE, 1);
+#else
+                sconf->spf_server = SPF_server_new(SPF_DNS_CACHE, 0);
+#endif
+                if (!sconf->spf_server) {
+                    logger_log(WARN, "SPF disabled due to setup error");
+                }
+            }
+        } else if (!strcmp(k, "mode")) {
+            if (!strcmp(v, "mbox")) {
+                sconf->delivery_mode = DELIVER_MBOX;
+            } else if (!strcmp(v, "maildir")) {
+                sconf->delivery_mode = DELIVER_MAILDIR;
+            } else {
+                logger_log(WARN, "Invalid option for mode in delivery, using default mbox");
+                sconf->delivery_mode = DELIVER_MBOX;
+            }
+        }
     }
 
     return 1;
@@ -146,11 +184,13 @@ static void cleanup(int signum) {
 /* main function */
 int main(int argc, char **argv) {
     int sfd, efd, pfd[2], cfd, i, flg;
-    struct barid_conf config = {0};
+    struct barid_conf *config;
     struct networker *networkers;
     struct serworker *serworkers;
     struct epoll_event epint = {0};
     struct sigaction action;
+
+    config = calloc(sizeof(struct barid_conf), 1);
 
     /* hi, world! */
 #ifndef DEBUG
@@ -160,17 +200,17 @@ int main(int argc, char **argv) {
 #endif
 
     /* load configuration */
-    config.bind.sin6_family = AF_INET6;
-    if (ini_parse(argc == 2 ? argv[1] : "barid.ini", server_conf, &config) < 0) {
+    config->bind.sin6_family = AF_INET6;
+    if (ini_parse(argc == 2 ? argv[1] : "barid.ini", server_conf, config) < 0) {
         logger_log(ERR, "Could not load configuration file %s", argc == 2 ? argv[1] : "barid.ini");
         return -__LINE__;
     }
 
     /* setup the smtp greetings and stuff */
-    smtp_gendynamic(&config);
+    smtp_gendynamic(config);
 
     /* setup the allowed email addresses */
-    mail_set_allowed(&config);
+    mail_set_allowed(config);
 
     /* start by creating a socket */
     if ((sfd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
@@ -185,8 +225,8 @@ int main(int argc, char **argv) {
     }
 
     /* bind port */
-    if (bind(sfd, (struct sockaddr *)&(config.bind), sizeof(config.bind)) < 0) {
-        logger_log(ERR, "Could not bind to the port %d!", ntohs(config.bind.sin6_port));
+    if (bind(sfd, (struct sockaddr *)&(config->bind), sizeof(config->bind)) < 0) {
+        logger_log(ERR, "Could not bind to the port %d!", ntohs(config->bind.sin6_port));
         return -__LINE__;
     }
 
@@ -211,18 +251,18 @@ int main(int argc, char **argv) {
     }
 
     /* set up worker threads' handles */
-    networkers = calloc(sizeof(*networkers), config.network);
+    networkers = calloc(sizeof(*networkers), config->network);
     if (!networkers) {
         logger_log(ERR, "System OOM");
         return -__LINE__;
     }
 
     /* set up networkers */
-    for (i = 0; i < config.network; i++) {
+    for (i = 0; i < config->network; i++) {
         /* set relevant variables */
         networkers[i].efd = efd;
         networkers[i].pfd = pfd[1]; /* write end */
-        networkers[i].sconf = &config; /* TODO: is it weird to pass a local stack variable to a different thread? */
+        networkers[i].sconf = config;
 
 #ifndef USE_PTHREADS
         /* allocate stack for child */
@@ -251,16 +291,17 @@ int main(int argc, char **argv) {
     }
 
     /* set up worker threads' handles */
-    serworkers = calloc(sizeof(*serworkers), config.delivery);
+    serworkers = calloc(sizeof(*serworkers), config->delivery);
     if (!serworkers) {
         logger_log(ERR, "System OOM");
         return -__LINE__;
     }
 
     /* set up serializing workers */
-    for (i = 0; i < config.delivery; i++) {
+    for (i = 0; i < config->delivery; i++) {
         /* create swork workers */
         serworkers[i].pfd = pfd[0]; /* read end */
+        serworkers[i].sconf = config;
 
 #ifndef USE_PTHREADS
         /* allocate stack for child */
@@ -345,7 +386,7 @@ int main(int argc, char **argv) {
     /* cleanup */
     logger_log(ERR, "%s quitting!", MAILVER);
 
-    for (int i = 0; i < config.network; i++) {
+    for (int i = 0; i < config->network; i++) {
 #ifndef USE_PTHREADS
         /* before clearing the stacks, waitpid just in case */
         waitpid(networkers[i].pid, NULL, 0);
@@ -357,7 +398,7 @@ int main(int argc, char **argv) {
     }
     free(networkers);
 
-    for (int i = 0; i < config.delivery; i++) {
+    for (int i = 0; i < config->delivery; i++) {
 #ifndef USE_PTHREADS
         /* before clearing the stacks, waitpid just in case */
         waitpid(serworkers[i].pid, NULL, 0);
@@ -372,8 +413,14 @@ int main(int argc, char **argv) {
     net_deinit_ssl();
     smtp_freedynamic();
 
-    free(config.host);
-    free(config.domains);
+    free(config->host);
+    free(config->domains);
+    if (config->spf_server) {
+        SPF_server_free(config->spf_server);
+        config->spf_server = NULL;
+    }
+
+    free(config);
 
     return 0;
 }

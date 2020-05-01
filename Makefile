@@ -1,6 +1,6 @@
-INCLUDES+=-Iinclude/ -Idist/mbedtls/include -Idist/inih
-LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih
-CFLAGS+=$(INCLUDES) -Wall -Werror -std=gnu99 -pedantic -D_DEFAULT_SOURCE -D_GNU_SOURCE
+INCLUDES+=-Iinclude/ -Idist/mbedtls/include -Idist/inih -Idist/libspf2/src/include
+LIBS=-lpthread -Ldist/ -lmbedtls -lmbedcrypto -lmbedx509 -linih -lspf2 -l:libresolv.a
+CFLAGS+=$(INCLUDES) -Wall -Werror -Wextra -std=c99 -pedantic -D_DEFAULT_SOURCE -D_GNU_SOURCE
 CFLAGS+=-DUSE_PTHREADS
 
 OBJ=objs/server.o objs/logger.o objs/networker.o objs/serworker.o objs/net.o
@@ -19,6 +19,12 @@ dist/libmbedtls.a:
 	$(MAKE) lib -C dist/mbedtls
 	cp dist/mbedtls/library/*.a dist/
 
+dist/libspf2.a:
+	-@git submodule update --init --recursive
+	cd dist/libspf2; ./configure
+	$(MAKE) -C dist/libspf2
+	cp dist/libspf2/src/libspf2/.libs/libspf2.a dist/
+
 dist/libinih.a:
 	-@git submodule update --init --recursive
 	cd dist/inih; $(CC) -c -o ini.o ini.c $(CFLAGS) $(EXTRA)
@@ -28,8 +34,8 @@ objs/%.o: src/%.c
 	@mkdir -p objs/
 	$(CC) -c -o $@ $< $(CFLAGS) $(EXTRA)
 
-$(OUTPUT): dist/libmbedtls.a $(OBJ)
-	$(CC) $^ -o $@ $(LIBS) $(CFLAGS)
+$(OUTPUT): dist/libmbedtls.a dist/libspf2.a dist/libinih.a $(OBJ)
+	$(CC) $(OBJ) -o $@ $(LIBS) $(CFLAGS)
 
 .PHONY: debug
 debug: CFLAGS += -g -O0

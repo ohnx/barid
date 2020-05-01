@@ -9,6 +9,8 @@
 #include <netinet/in.h>
 /* mbedtls_ssl_context */
 #include "mbedtls/ssl.h"
+/*SPF_server_t*/
+#include "spf.h"
 
 /* max length of an email's recipients (in bytes)
  * 512 recipients @ 256 bytes per email = 131072 B (128 KiB) */
@@ -19,6 +21,12 @@
 
 /* buffer for a single line of input from a client */
 #define LARGEBUF                4096
+
+/* delivery mode */
+enum delivery_mode {
+    DELIVER_MBOX = 0,
+    DELIVER_MAILDIR
+};
 
 /* server configuration*/
 struct barid_conf {
@@ -36,6 +44,10 @@ struct barid_conf {
     char *ssl_key;
     char *ssl_cert;
     char ssl_enabled;
+
+    /* delivery */
+    SPF_server_t *spf_server;
+    enum delivery_mode delivery_mode;
 };
 
 #define BC_FLG_SSL_ENABLED 0x1

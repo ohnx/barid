@@ -233,7 +233,7 @@ next_line:
             /* update state */
             client->state = S_MAIL;
             break;
-        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) "" MAILVER); goto end;
+        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) " in " MAILVER); goto end;
         }
         break;
     case V_STLS:
@@ -261,7 +261,7 @@ next_line:
             lc = 250;
             /* update state */
             client->state = S_RCPT; break;
-        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) "" MAILVER); goto end;
+        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) " in " MAILVER); goto end;
         }
         break;
     case V_RCPT:
@@ -287,7 +287,7 @@ next_line:
             lc = 250;
             /* update state */
             client->state = S_DATA; break;
-        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) "" MAILVER); goto end;
+        default: logger_log(ERR, "Uncaught exception "__FILE__ ":" xstr(__LINE__) " in " MAILVER); goto end;
         }
         break;
     case V_DATA:
