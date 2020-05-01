@@ -6,4 +6,4 @@
 	url = https://github.com/benhoyt/inih.git
 [submodule "dist/libspf2"]
 	path = dist/libspf2
-	url = git@github.com:shevek/libspf2.git
+	url = https://github.com/ohnx/libspf2.git
