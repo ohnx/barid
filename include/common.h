@@ -33,6 +33,7 @@ struct barid_conf {
     /* general */
     char *host;
     char *domains;
+    char *accounts;
 
     /* workers */
     int network, delivery;
@@ -119,7 +120,7 @@ struct mail {
 };
 
 /* version string */
-#define MAILVER "barid v1.0.1b"
+#define MAILVER "barid v1.2.4f"
 
 /* running flag */
 extern sig_atomic_t running;

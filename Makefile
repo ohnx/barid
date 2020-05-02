@@ -4,7 +4,7 @@ CFLAGS+=$(INCLUDES) -Wall -Werror -Wextra -std=c99 -pedantic -D_DEFAULT_SOURCE -
 CFLAGS+=-DUSE_PTHREADS
 
 OBJ=objs/server.o objs/logger.o objs/networker.o objs/serworker.o objs/net.o
-OBJ+=objs/smtp.o objs/mail.o
+OBJ+=objs/smtp.o objs/mail.o objs/mail_serialize.o
 OUTPUT=barid
 
 default: $(OUTPUT)

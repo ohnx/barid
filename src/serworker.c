@@ -89,7 +89,13 @@ start:
                 );
 
     /* call serialize function to file */
-    mail_serialize_file(mail);
+    if (self->sconf->delivery_mode == DELIVER_MBOX) {
+        if (mail_serialize_mbox(mail))
+            logger_log(WARN, "Failed to write mail to file!");
+    } else {
+        if (mail_serialize_maildir(mail))
+            logger_log(WARN, "Failed to write mail to file!");
+    }
 
     goto cleanup_mail;
 

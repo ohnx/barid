@@ -68,6 +68,7 @@ static int server_conf(void *c, const char *s, const char *k, const char *v) {
     if (!strcmp(s, "general")) {
         if (!strcmp(k, "host") && !sconf->host) sconf->host = strdup(v);
         else if (!strcmp(k, "domains") && !sconf->domains) sconf->domains = strdup(v);
+        else if (!strcmp(k, "accounts") && !sconf->accounts) sconf->accounts = strdup(v);
     } else if (!strcmp(s, "workers")) {
         if (!strcmp(k, "network")) {
             sconf->network = atoi(v);
@@ -205,6 +206,13 @@ int main(int argc, char **argv) {
         logger_log(ERR, "Could not load configuration file %s", argc == 2 ? argv[1] : "barid.ini");
         return -__LINE__;
     }
+
+    /* config defaults */
+    if (config->network <= 0) config->network = 2;
+    if (config->delivery <= 0) config->delivery = 2;
+    if (!config->host) config->host = strdup("localhost");
+    if (!config->domains) config->host = strdup("*");
+    if (!config->accounts) config->host = strdup("*");
 
     /* setup the smtp greetings and stuff */
     smtp_gendynamic(config);
@@ -415,6 +423,7 @@ int main(int argc, char **argv) {
 
     free(config->host);
     free(config->domains);
+    free(config->accounts);
     if (config->spf_server) {
         SPF_server_free(config->spf_server);
         config->spf_server = NULL;

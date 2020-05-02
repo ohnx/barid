@@ -35,7 +35,8 @@ int mail_reset(struct mail *email);
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_appenddata(struct mail *email, const char *data);
-int mail_serialize_file(struct mail *email);
+int mail_serialize_mbox(struct mail *email);
+int mail_serialize_maildir(struct mail *email);
 void mail_destroy(struct mail *email);
 
 #endif /* __MAIL_H_INC */
