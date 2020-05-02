@@ -5,3 +5,22 @@ compiler:
 
 script:
   - make
+
+env:
+  global:
+   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+   #   via the "travis encrypt" command using the project repo's public key
+   - secure: "Fd0pZiGDlokpYGpHWiFs6FfRBfSwcUBNd2d1vVYB+UbTnaEDLauuJXW44yZn3l8Epq0KJWxtfRr6rj628e+jkIJRfZ9vDZNsjO9kH7xGqVXIob+5dksXD33zYq0y2b0y7/QdopHjS1ZwW//omVxvUM4TLTD5u55eU0lL+6tvwa423hq77kQE8HsnxydUr/v8o8IymA8vhdFkoSboytJa8M7ShlTSpsGj9x52AuMcB/A/CppUKZU/2JrPokv4YUDpCV2F8QVL8IYD3s1MMhbS6YKIAeAPoKhtBGxMOs0669zSSGhJadEfW8QqwJ7iELgIa8VAxBchQlSAeABeGQSNrJUgJ9O2CHlsGlIBS1ADkbhjLSpy3tyo2O4T9J81MHBzOUnRYnXqtjrP7FBw95xKQkZa6BqEf18CUQKvhRySeX0kS/derlXWVMZ3kPtS4A4GJUuZhh7KqkRUE59eDX3H3TT28WEo2mdxJY2Kgf5qjdm3ghk9vClflaR6eSr954ne/3E7DHXNLwF88/71Ksqb+x9DqOkeWddnbP98YNw6Y9+h5Wa/wstqtWB7k/Sd/uuiA7Cmnd+7+w1C28QZYTpChC1dHoGAwBvKTqCan9HhPrbShGmx80V//Wh7BV6BH+VcjD65H0DzLNBrjwpb65a0IbB8A1oQ1Ue94anspI57a8E="
+
+before_install:
+  - echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
+
+addons:
+  coverity_scan:
+    project:
+      name: "ohnx/barid"
+      description: "Simple SMTP mail server"
+    notification_email: masonx.01@gmail.com
+    build_command_prepend: "true"
+    build_command: "make"
+    branch_pattern: coverity
