@@ -31,7 +31,8 @@ void *serworker_loop(void *z) {
     struct serworker *self = (struct serworker *)z;
     struct mail *mail;
     unsigned int len;
-    char ip[46], hst[NI_MAXHOST];
+    int i;
+    char ip[46], hst[NI_MAXHOST], *at_loc, *fo, *fo_o, *cps;
     SPF_request_t *spf_request = NULL;
     SPF_response_t *spf_response = NULL;
 
@@ -88,13 +89,41 @@ start:
                 mail->to_v
                 );
 
-    /* call serialize function to file */
-    if (self->sconf->delivery_mode == DELIVER_MBOX) {
-        if (mail_serialize_mbox(mail))
-            logger_log(WARN, "Failed to write mail to file!");
-    } else {
-        if (mail_serialize_maildir(mail))
-            logger_log(WARN, "Failed to write mail to file!");
+    /* loop through each of the addresses to deliver to */
+    for (i = 0; i < mail->to_c; i++) {
+        /* temporarily clear '@' to ignore domain */
+        at_loc = strchr(mail->to_v + i, '@');
+        *at_loc = 0;
+
+        /* allocate memory for file output name */
+        fo = fo_o = strdup(mail->to_v + i);
+
+        /* ignore all characters after last + sign */
+        cps = strchr(fo, '+');
+        if (cps) *cps = 0;
+
+        /* check for comments at start and skip past them */
+        if (*fo == '(' && (cps = strchr(fo, ')')) != NULL) fo = cps+1;
+
+        /* check for comments at end and null them out */
+        if (fo[strlen(fo)] == ')' && (cps = strchr(fo, '(')) != NULL) *cps = 0;
+
+        /* call serialize function to file */
+        if (self->sconf->delivery_mode == DELIVER_MBOX) {
+            if (mail_serialize_mbox(mail, fo))
+                logger_log(WARN, "Failed to deliver mail to %s!", mail->to_v + i);
+        } else {
+            if (mail_serialize_maildir(mail, fo))
+                logger_log(WARN, "Failed to deliver mail to %s!", mail->to_v + i);
+        }
+
+        /* cleanup */
+        free(fo_o);
+        fo_o = NULL;
+
+        /* advance to next mailbox */
+        *at_loc = '@';
+        i += strlen(mail->to_v + i);
     }
 
     goto cleanup_mail;

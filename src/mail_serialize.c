@@ -14,11 +14,11 @@
 /* MAIL_ERROR_OOM, etc. */
 #include "mail.h"
 
-int mail_serialize_mbox(struct mail *email) {
-    char *at_loc, *fo, *fo_o, *from_fix, *cps;
+int mail_serialize_mbox(struct mail *email, const char *account) {
+    char *from_fix;
     char timebuf[26];
+    int i = 0;
     time_t timep;
-    int i;
     FILE *fp;
 
     /* get time as string */
@@ -31,58 +31,44 @@ int mail_serialize_mbox(struct mail *email) {
         if (from_fix[i] == ' ')
             from_fix[i] = '-';
 
-    /* loop through all addresses to deliver to */
-    for (i = 0; i < email->to_c; i++) {
-        /* temporarily clear '@' to ignore domain */
-        at_loc = strchr(email->to_v + i, '@');
-        *at_loc = 0;
+    /* open the specified file */
+    fp = fopen(account, "a");
+    if (fp == NULL) goto error;
 
-        /* allocate memory for file output name */
-        fo = fo_o = strdup(email->to_v + i);
+    /* get time (timebuf has \n already) */
+    if (fprintf(fp, "From %s %s", from_fix, timebuf) < 0) goto error;
 
-        /* ignore all characters after last + sign */
-        cps = strchr(fo, '+');
-        if (cps) *cps = 0;
+    /* print out data */
+    if (fprintf(fp, "%s\n", email->data_v) < 0) goto error;
 
-        /* check for comments at start and skip past them */
-        if (*fo == '(' && (cps = strchr(fo, ')')) != NULL) fo = cps+1;
+    /* close file + clean up */
+    if (fclose(fp) != 0) goto error;
 
-        /* check for comments at end and null them out */
-        if (fo[strlen(fo)] == ')' && (cps = strchr(fo, '(')) != NULL) *cps = 0;
-
-        /* open the specified file */
-        fp = fopen(fo, "a");
-        if (fp == NULL) goto error;
-
-        /* get time (timebuf has \n already) */
-        if (fprintf(fp, "From %s %s", from_fix, timebuf) < 0) goto error;
-
-        /* print out data */
-        if (fprintf(fp, "%s\n", email->data_v) < 0) goto error;
-
-        /* close file + clean up */
-        if (fclose(fp) != 0) goto error;
-
-        free(fo_o);
-        fo_o = NULL;
-
-        /* advance to next one */
-        *at_loc = '@';
-        i += strlen(email->to_v + i);
-        continue;
-
-    error:
-        /* failed to open file, return error */
-        free(fo_o);
-        free(from_fix);
-        return -1;
-    }
-
+    /* all good! */
     free(from_fix);
+    return 0;
+
+error:
+    /* failed to open file, return error */
+    free(from_fix);
+    return -1;
+}
+
+int mkdirp(const char *dir) {
+    (void)dir;
     return 0;
 }
 
-int mail_serialize_maildir(struct mail *email) {
+int mail_serialize_maildir(struct mail *email, const char *account) {
     (void)email;
+    (void)account;
+    /* create directories */
+
+    /* come up with unique file name */
+
+    /* write to the file */
+
+
+
     return 0;
 }

@@ -20,23 +20,14 @@ enum mail_attr {
     REMOTE_ADDR
 };
 
-/* serialize output format */
-enum mail_sf {
-    NONE = 0,
-    STDOUT = 1,
-    BINARY = 3,
-    MAILBOX = 4,
-    BOTH = 5
-};
-
 void mail_set_allowed(struct barid_conf *conf);
 struct mail *mail_new(const char *froms);
 int mail_reset(struct mail *email);
 int mail_setattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_addattr(struct mail *email, enum mail_attr attr, const char *data);
 int mail_appenddata(struct mail *email, const char *data);
-int mail_serialize_mbox(struct mail *email);
-int mail_serialize_maildir(struct mail *email);
+int mail_serialize_mbox(struct mail *email, const char *account);
+int mail_serialize_maildir(struct mail *email, const char *account);
 void mail_destroy(struct mail *email);
 
 #endif /* __MAIL_H_INC */
