@@ -27,6 +27,8 @@
 #include "ini.h"
 /* SPF_server_new(), SPF_server_free() */
 #include "spf.h"
+/* curl */
+#include <curl/curl.h>
 
 /* MAIL_VER, struct barid_conf */
 #include "common.h"
@@ -167,6 +169,8 @@ static int server_conf(void *c, const char *s, const char *k, const char *v) {
                 sconf->delivery_mode = DELIVER_MBOX;
             } else if (!strcmp(v, "maildir")) {
                 sconf->delivery_mode = DELIVER_MAILDIR;
+            } else if (!strcmp(v, "gotodo")) {
+                sconf->delivery_mode = DELIVER_GOTODO;
             } else {
                 logger_log(WARN, "Invalid option for mode in delivery, using default mbox");
                 sconf->delivery_mode = DELIVER_MBOX;
@@ -262,6 +266,12 @@ int main(int argc, char **argv) {
     networkers = calloc(sizeof(*networkers), config->network);
     if (!networkers) {
         logger_log(ERR, "System OOM");
+        return -__LINE__;
+    }
+
+    /* set up cURL */
+    if (curl_global_init(CURL_GLOBAL_ALL)) {
+        logger_log(ERR, "Could not init cURL");
         return -__LINE__;
     }
 
@@ -420,6 +430,7 @@ int main(int argc, char **argv) {
 
     net_deinit_ssl();
     smtp_freedynamic();
+    curl_global_cleanup();
 
     free(config->host);
     free(config->domains);

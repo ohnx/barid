@@ -253,7 +253,7 @@ int mail_appenddata(struct mail *email, const char *data) {
 
     /* get data length */
     data_len = strlen(data) + 1;
-    
+
     /* Need to add a '>' to 'From ' */
     appB = !strncmp(data, "From ", 5);
     if (appB) data_len++;

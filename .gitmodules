@@ -7,3 +7,6 @@
 [submodule "dist/libspf2"]
 	path = dist/libspf2
 	url = https://github.com/ohnx/libspf2.git
+[submodule "dist/jansson"]
+	path = dist/jansson
+	url = git@github.com:akheron/jansson.git

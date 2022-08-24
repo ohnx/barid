@@ -4,7 +4,7 @@ compiler:
   - clang
 
 script:
-  - make
+  - if [ ${COVERITY_SCAN_BRANCH} != 1 ]; then make ; fi
 
 env:
   global:
@@ -21,6 +21,6 @@ addons:
       name: "ohnx/barid"
       description: "Simple SMTP mail server"
     notification_email: masonx.01@gmail.com
-    build_command_prepend: "true"
+    build_command_prepend: "make libs"
     build_command: "make"
     branch_pattern: coverity

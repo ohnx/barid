@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 /* getnameinfo() */
 #include <netdb.h>
+/* libcurl */
+#include <curl/curl.h>
 
 /* running flag */
 #include "common.h"
@@ -18,6 +20,9 @@
 #include "logger.h"
 /* mail_destroy() */
 #include "mail.h"
+
+/* in gotodo.c */
+int gotodo_parse_and_submit(CURL *curl, struct mail *email, const char *account);
 
 int serworker_deliver(int fd, struct mail *mail) {
     return sizeof(mail) - write(fd, &mail, sizeof(mail));
@@ -35,6 +40,12 @@ void *serworker_loop(void *z) {
     char ip[46], hst[NI_MAXHOST], *at_loc, *fo, *fo_o, *cps;
     SPF_request_t *spf_request = NULL;
     SPF_response_t *spf_response = NULL;
+    CURL *curl = curl_easy_init();
+
+    if (!curl) {
+        logger_log(ERR, "cURL initialization failed!\n");
+        goto end;
+    }
 
 start:
     /* read in the pointer to the mail object to serialize */
@@ -112,6 +123,9 @@ start:
         if (self->sconf->delivery_mode == DELIVER_MBOX) {
             if (mail_serialize_mbox(mail, fo))
                 logger_log(WARN, "Failed to deliver mail to %s!", mail->to_v + i);
+        } else if (self->sconf->delivery_mode == DELIVER_GOTODO) {
+            if (gotodo_parse_and_submit(curl, mail, fo))
+                logger_log(WARN, "Failed to deliver mail to %s!", mail->to_v + i);
         } else {
             if (mail_serialize_maildir(mail, fo))
                 logger_log(WARN, "Failed to deliver mail to %s!", mail->to_v + i);
@@ -156,5 +170,6 @@ next:
     else goto start;
 
 end:
+    if (curl) curl_easy_cleanup(curl);
     return 0;
 }

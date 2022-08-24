@@ -25,7 +25,8 @@
 /* delivery mode */
 enum delivery_mode {
     DELIVER_MBOX = 0,
-    DELIVER_MAILDIR
+    DELIVER_MAILDIR,
+    DELIVER_GOTODO
 };
 
 /* server configuration*/

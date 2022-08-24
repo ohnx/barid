@@ -4,3 +4,5 @@ barid
 *.so
 *.a
 barid.ini
+test/
+gotodo_test
